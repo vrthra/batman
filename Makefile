@@ -1,9 +1,9 @@
 I=a
-
+.SUFFIXES:
 .SECONDARY:
 
 %.out: src/%.c
-	cc -o $@ $^ -I src
+	cc -g -o $@ $^ -I src
 
 %.count: %.out
 	@sudo /usr/bin/perf stat -e instructions:u ./$< '$(I)'  2>&1 | grep instructions
@@ -16,7 +16,7 @@ clean:
 	rm -f *.out *.count
 
 suid.out: src/suid.c
-	cc -o $@ $^
+	cc -g -o $@ $^
 	sudo chown root:root suid.out
 	sudo chmod 4755 suid.out   # numeric form (4 = setuid). Equivalent: sudo chmod u+s showuid
 

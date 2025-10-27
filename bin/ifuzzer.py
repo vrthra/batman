@@ -9,8 +9,8 @@ MAX_STRINGS = 10000
 COUNT=10
 MIN_INCREASE = 10
 my_program = os.environ.get('PROGRAM', './program.out')
-#charset = string.printable # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
-charset = ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
+#CHARSET = string.printable # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
+CHARSET = ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
 
 def printc(text, color):
     color_codes = {
@@ -69,8 +69,9 @@ def validate_prog(input_str, log_level):
         # Get instruction count for extended input (with arbitrary character)
         instructions_extended_total = 0
         instructions_extended_count = 0
+        used = []
         for i in range(COUNT):
-            c = get_next_char(log_level)
+            c = get_next_char(log_level, used)
             extended_input = input_str + c
             instructions_extended, returncode_extended = get_instructions(extended_input)
             if instructions_extended is None: continue
@@ -104,9 +105,11 @@ def validate_prog(input_str, log_level):
 import string
 import random
 
-def get_next_char(log_level):
-    idx = random.randrange (0,len(charset),1)
-    input_char = charset[idx]
+def get_next_char(log_level, used):
+    my_charset = [c for c in CHARSET if c not in used]
+    idx = random.randrange (0,len(my_charset),1)
+    input_char = my_charset[idx]
+    used.append(input_char)
     #if (log_level):
         #print(input_char)
     return input_char
@@ -119,8 +122,13 @@ def generate(log_level):
     :returns completed string
     """
     prev_str = ""
+    used = []
     while True:
-        char = get_next_char(log_level)
+        # allow one backtracking.
+        if len(used) == len(CHARSET):
+            prev_str = prev_str[0:-1]
+            used = []
+        char = get_next_char(log_level, used)
         curr_str = prev_str + str(char)
         rv, n, c = validate_prog(curr_str, log_level)
         if log_level:
@@ -128,6 +136,7 @@ def generate(log_level):
         if rv == "complete":
             return curr_str
         elif rv == "incomplete": # go ahead...
+            used = []
             prev_str = curr_str
             continue
         elif rv == "incorrect": # try again with a new random character do not save current character
