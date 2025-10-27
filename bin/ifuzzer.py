@@ -46,7 +46,31 @@ def validate_parens(input_str, log_level):
         else:
             raise e
 
+import subprocess
 def validate_prog(input_str, log_level):
+    try:
+        cmd = ['sudo', '/usr/bin/perf', 'stat', '-e', 'instructions:u', './program.out', input_str]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        
+        instructions = None
+        # "     12,345      instructions:u"
+        for line in result.stderr.split('\n'):
+            if 'instructions:u' in line:
+                parts = line.strip().split()
+                if parts:
+                    instructions = parts[0].replace(',', '')
+                    break
+        if log_level and instructions:
+            print(f"Instructions executed: {instructions}")
+        return "incomplete", -1, ""
+    except subprocess.TimeoutExpired:
+        if log_level:
+            print("Command timed out")
+        return "wrong", -1, ""
+    except Exception as e:
+        if log_level:
+            print(f"Error running command: {e}")
+        return "wrong", -1, ""
 
 import string
 import random
