@@ -27,4 +27,4 @@ pxctl: pxctl.out
 	cp $^ $@
 
 run.cJSON:
-	env PROGRAM=./cJSON.out python3 $(DBG) bin/ifuzzer.py
+	env PROGRAM=./cJSON.out python3 $(DBG) bin/batman.py
