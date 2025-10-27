@@ -5,7 +5,9 @@
 
 import os
 import subprocess
+MAX_STRINGS = 10000
 COUNT=10
+MIN_INCREASE = 10
 my_program = os.environ.get('PROGRAM', './program.out')
 # Run perf and extract instruction count
 def get_instructions(input_string):
@@ -60,7 +62,7 @@ def validate_prog(input_str, log_level):
 
         avg_instructions_extended = instructions_extended_total * 1.0 / instructions_extended_count
 
-        if (avg_instructions_extended - avg_instructions_current) > 10:
+        if (avg_instructions_extended - avg_instructions_current) > MIN_INCREASE:
             if log_level:
                 print(f"Instructions increased: {instructions_extended} > {instructions_current} - incomplete")
             return "incomplete", -1, ""
@@ -82,7 +84,8 @@ import string
 import random
 
 def get_next_char(log_level):
-    set_of_chars = string.printable # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
+    #set_of_chars = string.printable # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
+    set_of_chars = ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
     idx = random.randrange (0,len(set_of_chars),1)
     input_char = set_of_chars[idx]
     #if (log_level):
@@ -125,4 +128,6 @@ def create_valid_strings(n, log_level):
                 var = f"Time used until input was generated: {toc - tic:f}\n" + repr(created_string) + "\n\n" 
                 myfile.write(var)
                 myfile.close()
-create_valid_strings(1000000000, 1)
+if __name__ == '__main__':
+    create_valid_strings(MAX_STRINGS, 1)
+
