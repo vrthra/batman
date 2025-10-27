@@ -46,6 +46,8 @@ def validate_parens(input_str, log_level):
         else:
             raise e
 
+def validate_prog(input_str, log_level):
+
 import string
 import random
 
