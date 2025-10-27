@@ -36,7 +36,7 @@ def validate_prog(input_str, log_level):
         if return_codes == 0:
             if log_level: print(f"Program returned 0 - complete")
             return "complete", 0, ""
-        
+
         if instructions_current_count == 0:
             if log_level: print("Could not parse instruction count")
             return "wrong", 101, ""
@@ -57,7 +57,7 @@ def validate_prog(input_str, log_level):
             return "wrong", 102, ""
 
         avg_instructions_extended = instructions_extended_total * 1.0 / instructions_extended_count
-        
+
         if avg_instructions_extended > avg_instructions_current:
             if log_level:
                 print(f"Instructions increased: {instructions_extended} > {instructions_current} - incomplete")
@@ -66,7 +66,7 @@ def validate_prog(input_str, log_level):
             if log_level:
                 print(f"Instructions did not increase: {instructions_extended} <= {instructions_current} - incorrect")
             return "incorrect", 1, ""
-        
+
     except subprocess.TimeoutExpired:
         if log_level:
             print("Command timed out")
@@ -114,7 +114,6 @@ def generate(log_level):
     return None
 import time
 def create_valid_strings(n, log_level):
-    os.remove("valid_inputs.txt")
     tic = time.time()
     while True:
         created_string = generate(log_level)
