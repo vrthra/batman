@@ -9,6 +9,8 @@ MAX_STRINGS = 10000
 COUNT=10
 MIN_INCREASE = 10
 my_program = os.environ.get('PROGRAM', './program.out')
+#charset = string.printable # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
+charset = ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
 
 def printc(text, color):
     color_codes = {
@@ -27,12 +29,6 @@ def printc(text, color):
         print(f"{color_codes[color.lower()]}{text}{color_codes['reset']}")
     else:
         print(text)
-
-# Example usage:
-print_colored("This text is red.", "red")
-print_colored("This text is green.", "green")
-print_colored("This text is blue.", "blue")
-print_colored("This text is in an unsupported color.", "purple")
 
 # Run perf and extract instruction count
 def get_instructions(input_string):
@@ -109,10 +105,8 @@ import string
 import random
 
 def get_next_char(log_level):
-    #set_of_chars = string.printable # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
-    set_of_chars = ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
-    idx = random.randrange (0,len(set_of_chars),1)
-    input_char = set_of_chars[idx]
+    idx = random.randrange (0,len(charset),1)
+    input_char = charset[idx]
     #if (log_level):
         #print(input_char)
     return input_char

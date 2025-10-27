@@ -26,5 +26,8 @@ DBG=
 pxctl: pxctl.out
 	cp $^ $@
 
-run.cJSON:
+run.cJSON: cJSON.out
 	env PROGRAM=./cJSON.out python3 $(DBG) bin/ifuzzer.py
+
+run.calc_parse: calc_parse.out
+	env PROGRAM=./calc_parse.out python3 $(DBG) bin/ifuzzer.py
