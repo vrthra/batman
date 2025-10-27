@@ -26,6 +26,11 @@ DBG=
 pxctl: pxctl.out
 	cp $^ $@
 
+run.%: %.out
+	env PROGRAM=./$^ python3 $(DBG) bin/batman.py
+
+
+
 run.cJSON: cJSON.out
 	env PROGRAM=./cJSON.out python3 $(DBG) bin/batman.py
 
