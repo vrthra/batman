@@ -29,7 +29,7 @@ def parens(xs):
 
 def validate_parens(input_str, log_level):
     """ return:
-        rv: "complete", "incomplete" or "wrong",
+        rv: "complete", "incomplete" or "incorrect",
         n: the index of the character -1 if not applicable
         c: the character where error happened  "" if not applicable
     """
@@ -42,27 +42,73 @@ def validate_parens(input_str, log_level):
             n = len(msg)
             return "incomplete", n, ""
         elif msg.startswith("error"):
-            return "wrong",len(input_str), input_str[-1]
+            return "incorrect",len(input_str), input_str[-1]
         else:
             raise e
 
 import subprocess
+my_program = './program.out'
+# Run perf and extract instruction count
+def get_instructions(input_string):
+    cmd = ['sudo', '/usr/bin/perf', 'stat', '-e', 'instructions:u', my_program , input_string]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+    for line in result.stderr.split('\n'):
+        if not 'instructions:u' in line: continue
+        parts = line.strip().split()
+        if not parts: continue
+        try:
+            return int(parts[0].replace(',', '')), result.returncode
+        except ValueError:
+            return None, result.returncode
+    return None, result.returncode
+
 def validate_prog(input_str, log_level):
     try:
-        cmd = ['sudo', '/usr/bin/perf', 'stat', '-e', 'instructions:u', './program.out', input_str]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        instructions_current_count = 0
+        instructions_current_total = 0
+        return_codes = 0
+        for i in range(100):
+            instructions_current, returncode_current = get_instructions(input_str)
+            if instructions_current is None:
+                if log_level: print("Could not parse instruction count")
+                continue
+            return_codes += returncode_current
+            instructions_current_count += 1
+            instructions_current_total += instructions_current
+        if return_codes == 0:
+            if log_level: print(f"Program returned 0 - complete")
+            return "complete", 0, ""
         
-        instructions = None
-        # "     12,345      instructions:u"
-        for line in result.stderr.split('\n'):
-            if 'instructions:u' in line:
-                parts = line.strip().split()
-                if parts:
-                    instructions = parts[0].replace(',', '')
-                    break
-        if log_level and instructions:
-            print(f"Instructions executed: {instructions}")
-        return "incomplete", -1, ""
+        if instructions_current_count == 0:
+            if log_level: print("Could not parse instruction count")
+            return "wrong", 101, ""
+        avg_instructions_current = instructions_current_total * 1.0 / instructions_current_count
+
+        # Get instruction count for extended input (with arbitrary character)
+        instructions_extended_total = 0
+        instructions_extended_count = 0
+        for c in random.sample(ascii.printable, 100):
+            extended_input = input_str + c
+            instructions_extended, returncode_extended = get_instructions(extended_input)
+            if instructions_extended is None: continue
+            instructions_extended_total += instructions_extended
+            instructions_extended_count += 1
+
+        if instructions_extended_total == 0:
+            if log_level: print("Could not parse instruction count for extended input")
+            return "wrong", 102, ""
+
+        avg_instructions_extended = instructions_extended_total * 1.0 / instructions_extended_count
+        
+        if avg_instructions_extended > avg_instructions_current:
+            if log_level:
+                print(f"Instructions increased: {instructions_extended} > {instructions_current} - incomplete")
+            return "incomplete", -1, ""
+        else:
+            if log_level:
+                print(f"Instructions did not increase: {instructions_extended} <= {instructions_current} - incorrect")
+            return "incorrect", 1, ""
+        
     except subprocess.TimeoutExpired:
         if log_level:
             print("Command timed out")
@@ -102,7 +148,7 @@ def generate(log_level):
         elif rv == "incomplete": # go ahead...
             prev_str = curr_str
             continue
-        elif rv == "wrong": # try again with a new random character do not save current character
+        elif rv == "incorrect": # try again with a new random character do not save current character
             continue
         else:
             print("ERROR What is this I dont know !!!")
