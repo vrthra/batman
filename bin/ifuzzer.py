@@ -12,7 +12,7 @@ my_program = os.environ.get('PROGRAM', './program.out')
 #CHARSET = string.printable # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
 CHARSET = ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
 
-def printc(text, color):
+def toc(text, color):
     color_codes = {
         "black": "\033[30m",
         "red": "\033[31m",
@@ -26,9 +26,9 @@ def printc(text, color):
     }
 
     if color.lower() in color_codes:
-        print(f"{color_codes[color.lower()]}{text}{color_codes['reset']}")
+        return f"{color_codes[color.lower()]}{text}{color_codes['reset']}"
     else:
-        print(text)
+        return text
 
 # Run perf and extract instruction count
 def get_instructions(input_string):
@@ -58,7 +58,7 @@ def validate_prog(input_str, log_level):
             instructions_current_count += 1
             instructions_current_total += instructions_current
         if return_codes == 0:
-            if log_level: printc(f"Program returned 0 - complete", 'green')
+            if log_level: print((f"Program returned 0 - complete" )) # , 'green'))
             return "complete", 0, ""
 
         if instructions_current_count == 0:
@@ -86,11 +86,11 @@ def validate_prog(input_str, log_level):
 
         if (avg_instructions_extended - avg_instructions_current) > MIN_INCREASE:
             if log_level:
-                printc(f"Instructions increased: {instructions_extended} > {instructions_current} - incomplete", 'yellow')
+                print((f"Instructions increased: {instructions_extended} > {instructions_current} - incomplete")) # , 'yellow'))
             return "incomplete", -1, ""
         else:
             if log_level:
-                printc(f"Instructions did not increase: {instructions_extended} <= {instructions_current} - incorrect", 'red')
+                print((f"Instructions did not increase: {instructions_extended} <= {instructions_current} - incorrect")) # , 'red'))
             return "incorrect", 1, ""
 
     except subprocess.TimeoutExpired:
@@ -132,7 +132,12 @@ def generate(log_level):
         curr_str = prev_str + str(char)
         rv, n, c = validate_prog(curr_str, log_level)
         if log_level:
-            print("%s n=%d, c=%s. Input string is %s" % (rv,n,c, repr(curr_str)))
+            if rv == 'complete':
+                print("%s n=%d, c=%s. Input string is %s" % (rv,n,c, toc(repr(curr_str),'green')))
+            elif rv == 'incomplete':
+                print("%s n=%d, c=%s. Input string is %s" % (rv,n,c, toc(repr(curr_str),'yellow')))
+            elif rv == 'incorrect':
+                print("%s n=%d, c=%s. Input string is %s" % (rv,n,c, toc(repr(curr_str),'red')))
         if rv == "complete":
             return curr_str
         elif rv == "incomplete": # go ahead...
