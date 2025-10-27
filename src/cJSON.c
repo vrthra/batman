@@ -2948,7 +2948,7 @@ char* read_input() {
     return chars;
 }
 
-int main(int argc, char** argv) {
+int main1(int argc, char** argv) {
     char* string = read_input();
     printf(string);
     cJSON *json = cJSON_Parse(string);
@@ -2960,3 +2960,31 @@ int main(int argc, char** argv) {
 
 }
 
+void strip_input(char *my_string) {
+  int read = strlen(my_string);
+  if (my_string[read - 1] == '\n') {
+    my_string[read - 1] = '\0';
+  }
+}
+int main(int argc, char *argv[]) {
+  char my_string[10240];
+  char result[10240];
+  int ret = -1;
+  if (argc == 1) {
+    char *v = fgets(my_string, 10240, stdin);
+    if (!v) {
+      exit(1);
+    }
+    strip_input(my_string);
+  } else {
+    strcpy(my_string, argv[1]);
+    strip_input(my_string);
+  }
+  printf("val: <%s>\n", my_string);
+  cJSON *json = cJSON_Parse(my_string);
+  if (json == NULL) {
+        printf("Invalid json.\n");
+        exit(1);
+  }
+  return 0;
+}
