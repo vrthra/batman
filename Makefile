@@ -20,3 +20,8 @@ suid.out: src/suid.c
 	sudo chown root:root suid.out
 	sudo chmod 4755 suid.out   # numeric form (4 = setuid). Equivalent: sudo chmod u+s showuid
 
+#DBG=-m pudb
+DBG=
+
+run.cJSON:
+	env PROGRAM=./cJSON.out python3 $(DBG) bin/ifuzzer.py

@@ -5,6 +5,7 @@
 
 import os
 import subprocess
+COUNT=10
 my_program = os.environ.get('PROGRAM', './program.out')
 # Run perf and extract instruction count
 def get_instructions(input_string):
@@ -25,7 +26,7 @@ def validate_prog(input_str, log_level):
         instructions_current_count = 0
         instructions_current_total = 0
         return_codes = 0
-        for i in range(100):
+        for i in range(COUNT):
             instructions_current, returncode_current = get_instructions(input_str)
             if instructions_current is None:
                 if log_level: print("Could not parse instruction count")
@@ -45,7 +46,8 @@ def validate_prog(input_str, log_level):
         # Get instruction count for extended input (with arbitrary character)
         instructions_extended_total = 0
         instructions_extended_count = 0
-        for c in random.sample(ascii.printable, 100):
+        for i in range(COUNT):
+            c = get_next_char(log_level)
             extended_input = input_str + c
             instructions_extended, returncode_extended = get_instructions(extended_input)
             if instructions_extended is None: continue
@@ -58,7 +60,7 @@ def validate_prog(input_str, log_level):
 
         avg_instructions_extended = instructions_extended_total * 1.0 / instructions_extended_count
 
-        if avg_instructions_extended > avg_instructions_current:
+        if (avg_instructions_extended - avg_instructions_current) > 10:
             if log_level:
                 print(f"Instructions increased: {instructions_extended} > {instructions_current} - incomplete")
             return "incomplete", -1, ""
@@ -100,7 +102,7 @@ def generate(log_level):
         curr_str = prev_str + str(char)
         rv, n, c = validate_prog(curr_str, log_level)
         if log_level:
-            print("%s n=%d, c=%s. Input string is %s" % (rv,n,c,curr_str))
+            print("%s n=%d, c=%s. Input string is %s" % (rv,n,c, repr(curr_str)))
         if rv == "complete":
             return curr_str
         elif rv == "incomplete": # go ahead...
@@ -123,4 +125,4 @@ def create_valid_strings(n, log_level):
                 var = f"Time used until input was generated: {toc - tic:f}\n" + repr(created_string) + "\n\n" 
                 myfile.write(var)
                 myfile.close()
-create_valid_strings(1000000000, 0)
+create_valid_strings(1000000000, 1)
