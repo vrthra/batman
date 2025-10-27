@@ -1,13 +1,22 @@
-count:
-	@sudo perf stat -e instructions:u ./cgidecode a         2>&1 | grep instructions
-	@sudo perf stat -e instructions:u ./cgidecode aa        2>&1 | grep instructions
-	@sudo perf stat -e instructions:u ./cgidecode aaa       2>&1 | grep instructions
+I=a
+
+.SECONDARY:
 
 %.out: src/%.c
 	cc -o $@ $^ -I src
 
 %.count: %.out
-	@sudo perf stat -e instructions:u ./$< a         2>&1 | grep instructions > $@
+	@sudo /usr/bin/perf stat -e instructions:u ./$< '$(I)'  2>&1 | grep instructions
 
 
-wget https://raw.githubusercontent.com/vrthra/mimid/refs/heads/master/Cmimid/examples/vector.h
+get:
+	wget https://raw.githubusercontent.com/vrthra/mimid/refs/heads/master/Cmimid/examples/vector.h
+
+clean:
+	rm -f *.out *.count
+
+suid.out: src/suid.c
+	cc -o $@ $^
+	sudo chown root:root suid.out
+	sudo chmod 4755 suid.out   # numeric form (4 = setuid). Equivalent: sudo chmod u+s showuid
+
