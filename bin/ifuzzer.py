@@ -9,6 +9,31 @@ MAX_STRINGS = 10000
 COUNT=10
 MIN_INCREASE = 10
 my_program = os.environ.get('PROGRAM', './program.out')
+
+def printc(text, color):
+    color_codes = {
+        "black": "\033[30m",
+        "red": "\033[31m",
+        "green": "\033[32m",
+        "yellow": "\033[33m",
+        "blue": "\033[34m",
+        "magenta": "\033[35m",
+        "cyan": "\033[36m",
+        "white": "\033[37m",
+        "reset": "\033[0m"  # Resets the color to default
+    }
+
+    if color.lower() in color_codes:
+        print(f"{color_codes[color.lower()]}{text}{color_codes['reset']}")
+    else:
+        print(text)
+
+# Example usage:
+print_colored("This text is red.", "red")
+print_colored("This text is green.", "green")
+print_colored("This text is blue.", "blue")
+print_colored("This text is in an unsupported color.", "purple")
+
 # Run perf and extract instruction count
 def get_instructions(input_string):
     cmd = ['sudo', '/usr/bin/perf', 'stat', '-e', 'instructions:u', my_program , input_string]
@@ -37,7 +62,7 @@ def validate_prog(input_str, log_level):
             instructions_current_count += 1
             instructions_current_total += instructions_current
         if return_codes == 0:
-            if log_level: print(f"Program returned 0 - complete")
+            if log_level: printc(f"Program returned 0 - complete", 'green')
             return "complete", 0, ""
 
         if instructions_current_count == 0:
@@ -64,11 +89,11 @@ def validate_prog(input_str, log_level):
 
         if (avg_instructions_extended - avg_instructions_current) > MIN_INCREASE:
             if log_level:
-                print(f"Instructions increased: {instructions_extended} > {instructions_current} - incomplete")
+                printc(f"Instructions increased: {instructions_extended} > {instructions_current} - incomplete", 'yellow')
             return "incomplete", -1, ""
         else:
             if log_level:
-                print(f"Instructions did not increase: {instructions_extended} <= {instructions_current} - incorrect")
+                printc(f"Instructions did not increase: {instructions_extended} <= {instructions_current} - incorrect", 'red')
             return "incorrect", 1, ""
 
     except subprocess.TimeoutExpired:
