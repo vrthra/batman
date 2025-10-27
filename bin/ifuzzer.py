@@ -4,50 +4,8 @@
 # bp = pudb.set_trace
 
 import os
-def parens(xs):
-    stack = [[]]
-    while True:
-        x, xs = xs[0], xs[1:]
-        if x == '(':
-            stack[-1].append([])
-            stack.append(stack[-1][-1])
-        elif x == ')':
-            stack.pop()
-            if not stack:
-                raise Exception('error: opening bracket is missing')
-                #raise ValueError('error: opening bracket is missing')
-        elif x in ' ':
-            stack[-1].append(x)
-        else:
-            raise Exception('error: Only numbers')
-        if xs == '':
-            break
-    if len(stack) > 1:
-        raise Exception('incomplete: closing bracket is missing')
-        #raise ValueError('error: closing bracket is missing')
-    return stack.pop()
-
-def validate_parens(input_str, log_level):
-    """ return:
-        rv: "complete", "incomplete" or "incorrect",
-        n: the index of the character -1 if not applicable
-        c: the character where error happened  "" if not applicable
-    """
-    try:
-        parens(input_str)
-        return "complete",-1,""
-    except Exception as e:
-        msg = str(e)
-        if msg.startswith("incomplete:"):
-            n = len(msg)
-            return "incomplete", n, ""
-        elif msg.startswith("error"):
-            return "incorrect",len(input_str), input_str[-1]
-        else:
-            raise e
-
 import subprocess
-my_program = './program.out'
+my_program = os.environ.get('PROGRAM', './program.out')
 # Run perf and extract instruction count
 def get_instructions(input_string):
     cmd = ['sudo', '/usr/bin/perf', 'stat', '-e', 'instructions:u', my_program , input_string]
