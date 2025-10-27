@@ -15,10 +15,8 @@ get:
 clean:
 	rm -f *.out *.count
 
-suid.out: src/suid.c
-	cc -g -o $@ $^
-	sudo chown root:root suid.out
-	sudo chmod 4755 suid.out   # numeric form (4 = setuid). Equivalent: sudo chmod u+s showuid
+gdbctl.out: src/gdbctl.c
+	cc -g -lutil -o $@ $^ -I src
 
 #DBG=-m pudb
 DBG=
