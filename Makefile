@@ -23,5 +23,8 @@ suid.out: src/suid.c
 #DBG=-m pudb
 DBG=
 
+pxctl: pxctl.out
+	cp $^ $@
+
 run.cJSON:
 	env PROGRAM=./cJSON.out python3 $(DBG) bin/ifuzzer.py
