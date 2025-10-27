@@ -2948,18 +2948,6 @@ char* read_input() {
     return chars;
 }
 
-int main1(int argc, char** argv) {
-    char* string = read_input();
-    printf(string);
-    cJSON *json = cJSON_Parse(string);
-    if (json == NULL) {
-        printf("Invalid json.\n");
-        exit(1);
-    }
-    //printf(cJSON_Print(json));
-
-}
-
 void strip_input(char *my_string) {
   int read = strlen(my_string);
   if (my_string[read - 1] == '\n') {
