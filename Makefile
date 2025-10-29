@@ -16,7 +16,7 @@ clean:
 	rm -f *.out *.count
 
 gdbctl.out: src/gdbctl.c
-	cc -g -lutil -o $@ $^ -I src
+	cc -g -lutil -o $@ $^ -I include
 
 #DBG=-m pudb
 DBG=
