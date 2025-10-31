@@ -2,6 +2,20 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+#include "perf_count_begin.h"
+#include "perf_count_end.h"
+
+
+
+static int custom_exit;
+void exit(int status) __attribute__((noreturn));
+void exit(int status) {
+  perf_count_end();
+  fprintf(stderr, "instructions: %lld\n", cpu_instructions_executed);
+  _exit(status);
+}
+
 int hex_values[256];
 
 void init_hex_values() {
@@ -78,6 +92,7 @@ int main(int argc, char *argv[]) {
     strip_input(my_string);
   }
   printf("val: <%s>\n", my_string);
+  perf_count_begin();
   ret = cgi_decode(my_string, &result);
-  return ret;
+  exit(ret);
 }
