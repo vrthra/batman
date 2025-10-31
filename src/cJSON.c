@@ -2957,6 +2957,7 @@ void strip_input(char *my_string) {
     my_string[read - 1] = '\0';
   }
 }
+
 int main(int argc, char *argv[]) {
   char my_string[10240];
   char result[10240];
@@ -2979,5 +2980,6 @@ int main(int argc, char *argv[]) {
         printf("Invalid json.\n");
         exit(1);
   }
+  printf("%lld\n", cpu_instructions_executed);
   return 0;
 }

@@ -15,6 +15,7 @@ static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
 }
 
 static int perf_fd = -1;
+static long long cpu_instructions_executed = 0;
 
 static inline void perf_count_begin() {
     struct perf_event_attr pe;
