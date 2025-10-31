@@ -61,6 +61,9 @@
 #define true ((cJSON_bool)1)
 #define false ((cJSON_bool)0)
 
+#include "perf_count_begin.h"
+#include "perf_count_end.h"
+
 typedef struct {
     const unsigned char *json;
     size_t position;
@@ -2969,7 +2972,9 @@ int main(int argc, char *argv[]) {
     strip_input(my_string);
   }
   printf("val: <%s>\n", my_string);
+  perf_count_begin();
   cJSON *json = cJSON_Parse(my_string);
+  perf_count_end();
   if (json == NULL) {
         printf("Invalid json.\n");
         exit(1);
