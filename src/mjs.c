@@ -1,4 +1,18 @@
 #include "mjs_extra.h"
+
+
+#include "perf_count_begin.h"
+#include "perf_count_end.h"
+
+
+
+static int custom_exit;
+void exit(int status) __attribute__((noreturn));
+void exit(int status) {
+  perf_count_end();
+  fprintf(stderr, "instructions: %lld\n", cpu_instructions_executed);
+  _exit(status);
+}
 mjs_val_t mjs_mk_array(struct mjs *mjs) {
   mjs_val_t ret = mjs_mk_object(mjs);
 
@@ -8721,6 +8735,8 @@ int main(int argc, char *argv[]) {
         close(fd);
     }
     printf("val: <%s>\n", my_string);
+    perf_count_begin();
     ret = parse_mjs(my_string);
+    exit(ret);
     return ret;
 }
