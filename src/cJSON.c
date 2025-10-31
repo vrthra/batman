@@ -2976,10 +2976,10 @@ int main(int argc, char *argv[]) {
   perf_count_begin();
   cJSON *json = cJSON_Parse(my_string);
   perf_count_end();
+  fprintf(stderr, "instructions: %lld\n", cpu_instructions_executed);
   if (json == NULL) {
         printf("Invalid json.\n");
         exit(1);
   }
-  printf("%lld\n", cpu_instructions_executed);
   return 0;
 }

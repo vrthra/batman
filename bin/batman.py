@@ -32,14 +32,14 @@ def toc(text, color):
 
 # Run perf and extract instruction count
 def get_instructions(input_string):
-    cmd = ['sudo', '/usr/bin/perf', 'stat', '-e', 'instructions:u', my_program , input_string]
+    cmd = ['sudo', my_program , input_string]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
     for line in result.stderr.split('\n'):
-        if not 'instructions:u' in line: continue
+        if not 'instructions:' in line: continue
         parts = line.strip().split()
         if not parts: continue
         try:
-            return int(parts[0].replace(',', '')), result.returncode
+            return int(parts[1]), result.returncode
         except ValueError:
             return None, result.returncode
     return None, result.returncode
