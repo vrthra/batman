@@ -8,6 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+#include "perf_count_begin.h"
+#include "perf_count_end.h"
 /* 
  * This is a compiler for the Tiny-C language.  Tiny-C is a
  * considerably stripped down version of C and it is meant as a
@@ -59,6 +62,13 @@
 
 /*---------------------------------------------------------------------------*/
 
+static int custom_exit;
+void exit(int status) __attribute__((noreturn));
+void exit(int status) {
+  perf_count_end();
+  fprintf(stderr, "instructions: %lld\n", cpu_instructions_executed);
+  _exit(status);
+}
 /* Lexer. */
 
 enum { DO_SYM, ELSE_SYM, IF_SYM, WHILE_SYM, LBRA, RBRA, LPAR, RPAR,
@@ -345,6 +355,8 @@ int main(int argc, char *argv[]) {
         close(fd);
     }
     printf("val: <%s>\n", my_string);
+    perf_count_begin();
     ret = parse_expr(my_string);
+    exit(ret);
     return ret;
 }
