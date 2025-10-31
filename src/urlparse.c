@@ -19,9 +19,23 @@ struct url_info {
     enum url_type type;
 };
 
-void parse_url(struct url_info *ui){
-    char url[PATH_MAX];
-    fgets(url, MAX, stdin);
+#define MAX 2048
+
+#include "perf_count_begin.h"
+#include "perf_count_end.h"
+
+
+static int custom_exit;
+void exit(int status) __attribute__((noreturn));
+void exit(int status) {
+  perf_count_end();
+  fprintf(stderr, "instructions: %lld\n", cpu_instructions_executed);
+  _exit(status);
+}
+
+void parse_url(struct url_info *ui, char* url){
+    /*char url[PATH_MAX];
+    fgets(url, MAX, stdin);*/
     char *p = url;
     char *q, *r, *s;
 
@@ -83,6 +97,7 @@ void parse_url(struct url_info *ui){
 
 int main(int argc, char* argv[]) {
     struct url_info url;
-    parse_url(&url);
-    return 0;
+    perf_count_begin();
+    parse_url(&url, argv[1]);
+    exit(0);
 }
