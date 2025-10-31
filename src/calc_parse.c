@@ -5,6 +5,18 @@
 
 #include "calc_parse.h"
 
+
+#include "perf_count_begin.h"
+#include "perf_count_end.h"
+
+static int custom_exit;
+void exit(int status) __attribute__((noreturn));
+void exit(int status) {
+  perf_count_end();
+  fprintf(stderr, "instructions: %lld\n", cpu_instructions_executed);
+  _exit(status);
+}
+
 struct index_num parse_num(char* s, int i) {
     struct index_num result;
     int slen = strlen(s);
@@ -115,5 +127,7 @@ int main(int argc, char *argv[]) {
         strip_input(my_string);
     }
     printf("val: <%s>\n", my_string);
+    perf_count_begin();
     parse_expr(my_string, 0, 0);
+    exit(0);
 }
