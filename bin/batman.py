@@ -182,12 +182,17 @@ def generate(log_level, seed_str: str = "") -> str | None:
     global queue
     prev_str = seed_str
     used = []
+    backtracked = False
 
     while True:
         # allow one backtracking.
         if len(used) == len(CHARSET):
+            if backtracked:
+                return None
+            backtracked = True
             prev_str = prev_str[0:-1]
             used = []
+
         char = get_next_char(log_level, used)
         curr_str = prev_str + str(char)
         rv, n, c = validate_prog(curr_str, log_level)
