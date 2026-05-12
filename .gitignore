@@ -1,3 +1,4 @@
 pxctl.out
 json.out
 *.out
+*.out.dSYM/**

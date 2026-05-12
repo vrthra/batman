@@ -3,6 +3,7 @@
 # import pudb
 # bp = pudb.set_trace
 
+import json
 import os
 import random
 import subprocess
@@ -53,29 +54,28 @@ def toc(text, color):
         return text
 
 
+def extract_blocks_from_json(json_file: str = "/tmp/tmp.json") -> int | None:
+    data = json.load(open(json_file))
+
+    total = 0
+    for f in data["data"][0]["functions"]:
+        for b in f.get("regions", []):
+            total += b[4]
+
+    return total if total > 0 else None
+
+
 # Run perf and extract instruction count
 def get_instructions(input_string):
     cmd = [
-        "sudo",
-        "/usr/bin/perf",
-        "stat",
-        "-e",
-        "instructions:u",
+        "sh",
+        "bin/handle_coverage.sh",
         my_program,
         input_string,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-    for line in result.stderr.split("\n"):
-        if "instructions:u" not in line:
-            continue
-        parts = line.strip().split()
-        if not parts:
-            continue
-        try:
-            return int(parts[0].replace(",", "")), result.returncode
-        except ValueError:
-            return None, result.returncode
-    return None, result.returncode
+    instructions = extract_blocks_from_json()
+    return instructions, result.returncode
 
 
 def validate_prog(input_str, log_level):
@@ -219,18 +219,18 @@ def generate(log_level):
 
 
 def create_valid_strings(n, log_level):
-    tic = time.time()
+    # tic = time.time()
+
+    with open("valid_inputs.txt", "w") as myfile:
+        myfile.write("")
+        myfile.close()
+
     while True:
         created_string = generate(log_level)
-        toc = time.time()
+        # toc = time.time()
         if created_string is not None:
             with open("valid_inputs.txt", "a") as myfile:
-                var = (
-                    f"Time used until input was generated: {toc - tic:f}\n"
-                    + repr(created_string)
-                    + "\n\n"
-                )
-                myfile.write(var)
+                myfile.write(repr(created_string) + "\n")
                 myfile.close()
 
 
