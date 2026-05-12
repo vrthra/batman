@@ -7,11 +7,12 @@ import json
 import os
 import random
 import subprocess
-import time
+
+# import time
 
 MAX_STRINGS = 10000
-COUNT = 10
-MIN_INCREASE = 10
+COUNT = 1
+MIN_INCREASE = 1
 my_program = os.environ.get("PROGRAM", "./program.out")
 # CHARSET = string.printable # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
 CHARSET = [
@@ -33,6 +34,8 @@ CHARSET = [
     ".",
     "'",
 ]
+
+queue = set([""])
 
 
 def toc(text, color):
@@ -169,14 +172,14 @@ def get_next_char(log_level, used):
     return input_char
 
 
-def generate(log_level):
+def generate(log_level, prev_str: str = ""):
     """
     Feed it one character at a time, and see if the parser rejects it.
     If it does not, then append one more character and continue.
     If it rejects, replace with another character in the set.
     :returns completed string
     """
-    prev_str = ""
+    global queue
     used = []
     while True:
         # allow one backtracking.
@@ -203,6 +206,7 @@ def generate(log_level):
                     % (rv, n, c, toc(repr(curr_str), "red"))
                 )
         if rv == "complete":
+            queue.add(curr_str)
             return curr_str
         elif rv == "incomplete":  # go ahead...
             used = []
@@ -226,11 +230,12 @@ def create_valid_strings(n, log_level):
         myfile.close()
 
     while True:
-        created_string = generate(log_level)
+        prev_str = random.choice(list(queue))
+        created_string = generate(log_level, prev_str)
         # toc = time.time()
         if created_string is not None:
             with open("valid_inputs.txt", "a") as myfile:
-                myfile.write(repr(created_string) + "\n")
+                myfile.write(created_string + "\n")
                 myfile.close()
 
 
