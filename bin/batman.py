@@ -172,7 +172,7 @@ def get_next_char(log_level, used):
     return input_char
 
 
-def generate(log_level, prev_str: str = ""):
+def generate(log_level, seed_str: str = "") -> str | None:
     """
     Feed it one character at a time, and see if the parser rejects it.
     If it does not, then append one more character and continue.
@@ -180,7 +180,9 @@ def generate(log_level, prev_str: str = ""):
     :returns completed string
     """
     global queue
+    prev_str = seed_str
     used = []
+
     while True:
         # allow one backtracking.
         if len(used) == len(CHARSET):
@@ -209,15 +211,16 @@ def generate(log_level, prev_str: str = ""):
             queue.add(curr_str)
             return curr_str
         elif rv == "incomplete":  # go ahead...
-            used = []
-            prev_str = curr_str
-            continue
+            queue.add(curr_str)
+            return None
         elif (
             rv == "incorrect"
         ):  # try again with a new random character do not save current character
+            if curr_str in queue:
+                queue.remove(curr_str)
             continue
         else:
-            print("ERROR What is this I dont know !!!")
+            print("ERROR: Unknown")
             break
     return None
 
