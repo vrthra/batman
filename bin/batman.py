@@ -74,9 +74,10 @@ def get_instructions(input_string):
         "sh",
         "bin/handle_coverage.sh",
         my_program,
-        input_string,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=5, input=input_string
+    )
     instructions = extract_blocks_from_json()
     return instructions, result.returncode
 
@@ -180,6 +181,7 @@ def generate(log_level, seed_str: str = "") -> str | None:
     :returns completed string
     """
     global queue
+
     prev_str = seed_str
     used = []
     backtracked = False

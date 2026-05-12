@@ -23,6 +23,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define BUF_LEN 10240
+
 /* cJSON */
 /* JSON parser in C. */
 
@@ -41,10 +43,14 @@
 #endif
 
 #include <ctype.h>
+#include <fcntl.h>
 #include <float.h>
 #include <limits.h>
 #include <math.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <unistd.h>
 
 #ifdef ENABLE_LOCALES
 #include <locale.h>
@@ -2878,12 +2884,25 @@ CJSON_PUBLIC(void) cJSON_free(void *object) {
 }
 
 int main(int argc, char *argv[]) {
-  if (argc != 2) {
-    printf("Usage: %s <string>\n", argv[0]);
-    return 1;
+  char buf[BUF_LEN];
+
+  if (argc == 1) {
+    int chars = read(fileno(stdin), buf, 10240);
+    if (!chars) {
+      exit(1);
+    }
+    buf[chars] = 0;
+  } else {
+    int fd = open(argv[1], O_RDONLY);
+    int chars = read(fd, buf, 10240);
+    if (!chars) {
+      exit(3);
+    }
+    buf[chars] = 0;
+    close(fd);
   }
 
-  cJSON *json = cJSON_ParseWithOpts(argv[1], NULL, 1);
+  cJSON *json = cJSON_ParseWithOpts(buf, NULL, 1);
 
   if (!json) {
     // puts("Error json create.");
