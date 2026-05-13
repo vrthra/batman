@@ -8,3 +8,4 @@ compile_commands.json
 *.profraw
 .pi/
 *.log
+.pi/

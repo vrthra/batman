@@ -9,11 +9,12 @@ import random
 import subprocess
 from collections import defaultdict
 
+# import string
 # import time
 
 MAX_STRINGS = 10000
 COUNT = 1
-MIN_INCREASE = 1
+MIN_INCREASE = 10
 my_program = os.environ.get("PROGRAM", "./program.out")
 # CHARSET = (
 #     string.printable
@@ -95,7 +96,7 @@ def validate_prog(input_str, log_level):
         instructions_current_count = 0
         instructions_current_total = 0
         return_codes = 0
-        for i in range(COUNT):
+        for _ in range(COUNT):
             instructions_current, returncode_current = get_instructions(input_str)
             if instructions_current is None:
                 if log_level:
@@ -127,7 +128,7 @@ def validate_prog(input_str, log_level):
                 continue
 
             extended_input = input_str + c
-            instructions_extended, returncode_extended = get_instructions(
+            instructions_extended, _returncode_extended = get_instructions(
                 extended_input
             )
             if instructions_extended is None:
@@ -144,7 +145,7 @@ def validate_prog(input_str, log_level):
             instructions_extended_total * 1.0 / instructions_extended_count
         )
 
-        if (avg_instructions_extended - avg_instructions_current) > MIN_INCREASE:
+        if abs(avg_instructions_extended - avg_instructions_current) > MIN_INCREASE:
             if log_level:
                 print(
                     (
