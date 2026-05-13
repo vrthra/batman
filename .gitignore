@@ -1,6 +1,7 @@
 pxctl.out
 json.out
 *.out
+*.out.dSYM
 *.out.dSYM/**
 valid_inputs.txt
 compile_commands.json
