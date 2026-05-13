@@ -2887,11 +2887,10 @@ int main(int argc, char *argv[]) {
   char buf[BUF_LEN];
 
   if (argc == 1) {
-    int chars = read(fileno(stdin), buf, 10240);
+    char *chars = fgets(buf, BUF_LEN, stdin);
     if (!chars) {
       exit(1);
     }
-    buf[chars] = 0;
   } else {
     int fd = open(argv[1], O_RDONLY);
     int chars = read(fd, buf, 10240);
