@@ -15,6 +15,7 @@ from collections import defaultdict
 MAX_STRINGS = 10000
 COUNT = 1
 MIN_INCREASE = 10
+LENGTH_INCREASE = 64
 my_program = os.environ.get("PROGRAM", "./program.out")
 # CHARSET = (
 #     string.printable
@@ -171,7 +172,7 @@ def validate_prog(input_str, log_level):
         return "wrong", -1, ""
 
 
-def get_next_char(log_level, prefix) -> str | None:
+def get_next_char(prefix: str, log_level: int = 0) -> str | None:
     global used
     my_charset = [c for c in CHARSET if c not in used[prefix]]
 
@@ -186,12 +187,27 @@ def get_next_char(log_level, prefix) -> str | None:
     return input_char
 
 
+def get_expanded_string(
+    prefix: str, expand_length: int = LENGTH_INCREASE, log_level: int = 0
+) -> str:
+    if log_level:
+        print(f"Expanding string: {prefix}")
+
+    res = prefix
+
+    for _ in range(expand_length):
+        input_char = get_next_char(res, log_level)
+        if input_char is None:
+            return res
+        res += input_char
+
+    return res
+
+
 def generate(log_level, seed_str: str = "") -> str | None:
     """
-    Feed it one character at a time, and see if the parser rejects it.
-    If it does not, then append one more character and continue.
-    If it rejects, replace with another character in the set.
-    :returns completed string
+    Feed the seed string with a long addition.
+    If it's rejected/
     """
     global queue, used
 
@@ -211,7 +227,7 @@ def generate(log_level, seed_str: str = "") -> str | None:
             backtracked = True
             prev_str = prev_str[0:-1]
 
-        char = get_next_char(log_level, prev_str)
+        char = get_next_char(prev_str, log_level)
 
         if char is None:
             return None
