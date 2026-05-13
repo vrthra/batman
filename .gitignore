@@ -5,3 +5,5 @@ json.out
 valid_inputs.txt
 compile_commands.json
 *.profraw
+.pi/
+*.log
