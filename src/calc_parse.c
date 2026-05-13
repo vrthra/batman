@@ -1,9 +1,15 @@
 #include <ctype.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <unistd.h>
 
 #include "calc_parse.h"
+
+#define BUF_LEN 10240
 
 struct index_num parse_num(char *s, int i) {
   struct index_num result;
@@ -111,18 +117,23 @@ void strip_input(char *my_string) {
 }
 
 int main(int argc, char *argv[]) {
-  char my_string[10240];
+  char buf[BUF_LEN];
   int ret;
   if (argc == 1) {
-    char *v = fgets(my_string, 10240, stdin);
+    char *v = fgets(buf, BUF_LEN, stdin);
     if (!v) {
       exit(1);
     }
-    strip_input(my_string);
+    strip_input(buf);
   } else {
-    strcpy(my_string, argv[1]);
-    strip_input(my_string);
+    int fd = open(argv[1], O_RDONLY);
+    int chars = read(fd, buf, 10240);
+    if (!chars) {
+      exit(3);
+    }
+    buf[chars] = 0;
+    close(fd);
   }
-  printf("val: <%s>\n", my_string);
-  parse_expr(my_string, 0, 0);
+  printf("val: <%s>\n", buf);
+  parse_expr(buf, 0, 0);
 }
