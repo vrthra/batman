@@ -4,3 +4,4 @@ json.out
 *.out.dSYM/**
 valid_inputs.txt
 compile_commands.json
+*.profraw

@@ -1,7 +1,9 @@
+#include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 enum url_type { URL_NORMAL, URL_OLD_TFTP, URL_PREFIX };
 
@@ -15,9 +17,7 @@ struct url_info {
   enum url_type type;
 };
 
-void parse_url(struct url_info *ui) {
-  char url[PATH_MAX];
-  fgets(url, PATH_MAX, stdin);
+void parse_url(struct url_info *ui, char *url) {
   char *p = url;
   char *q, *r, *s;
 
@@ -78,7 +78,24 @@ void parse_url(struct url_info *ui) {
 }
 
 int main(int argc, char *argv[]) {
-  struct url_info url;
-  parse_url(&url);
+  char url[PATH_MAX];
+
+  if (argc == 1) {
+    char *chars = fgets(url, PATH_MAX, stdin);
+    if (!chars) {
+      exit(1);
+    }
+  } else {
+    int fd = open(argv[1], O_RDONLY);
+    int chars = read(fd, url, 10240);
+    if (!chars) {
+      exit(3);
+    }
+    url[chars] = 0;
+    close(fd);
+  }
+
+  struct url_info ui;
+  parse_url(&ui, url);
   return 0;
 }
