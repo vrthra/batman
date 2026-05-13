@@ -6,7 +6,9 @@
 import json
 import os
 import random
+import string
 import subprocess
+from collections import defaultdict
 
 # import time
 
@@ -14,7 +16,9 @@ MAX_STRINGS = 10000
 COUNT = 1
 MIN_INCREASE = 1
 my_program = os.environ.get("PROGRAM", "./program.out")
-# CHARSET = string.printable # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
+# CHARSET = (
+#     string.printable
+# )  # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
 CHARSET = [
     "[",
     "]",
@@ -35,7 +39,9 @@ CHARSET = [
     "'",
 ]
 
+
 queue = set([""])
+used: dict[str, set[str]] = defaultdict(set)
 
 
 def toc(text, color):
@@ -115,9 +121,12 @@ def validate_prog(input_str, log_level):
         # Get instruction count for extended input (with arbitrary character)
         instructions_extended_total = 0
         instructions_extended_count = 0
-        used = []
-        for i in range(COUNT):
-            c = get_next_char(log_level, used)
+
+        for _ in range(COUNT):
+            c = get_next_char(log_level, input_str)
+            if c is None:
+                continue
+
             extended_input = input_str + c
             instructions_extended, returncode_extended = get_instructions(
                 extended_input
@@ -163,11 +172,16 @@ def validate_prog(input_str, log_level):
         return "wrong", -1, ""
 
 
-def get_next_char(log_level, used):
-    my_charset = [c for c in CHARSET if c not in used]
+def get_next_char(log_level, prefix) -> str | None:
+    global used
+    my_charset = [c for c in CHARSET if c not in used[prefix]]
+
+    if len(my_charset) == 0:
+        return None
+
     idx = random.randrange(0, len(my_charset), 1)
     input_char = my_charset[idx]
-    used.append(input_char)
+    used[prefix].add(input_char)
     # if (log_level):
     # print(input_char)
     return input_char
@@ -180,22 +194,29 @@ def generate(log_level, seed_str: str = "") -> str | None:
     If it rejects, replace with another character in the set.
     :returns completed string
     """
-    global queue
+    global queue, used
 
     prev_str = seed_str
-    used = []
     backtracked = False
 
     while True:
         # allow one backtracking.
-        if len(used) == len(CHARSET):
+        if len(used[seed_str]) == len(CHARSET):
+            del used[seed_str]
+
+            if seed_str in queue:
+                queue.remove(seed_str)
+
             if backtracked:
                 return None
             backtracked = True
             prev_str = prev_str[0:-1]
-            used = []
 
-        char = get_next_char(log_level, used)
+        char = get_next_char(log_level, prev_str)
+
+        if char is None:
+            return None
+
         curr_str = prev_str + str(char)
         rv, n, c = validate_prog(curr_str, log_level)
         if log_level:
