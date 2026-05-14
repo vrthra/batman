@@ -16,6 +16,10 @@ MAX_STRINGS = 10000
 COUNT = 1
 MIN_INCREASE = 10
 LENGTH_INCREASE = 64
+
+SAMPLE_COUNT = 10
+BANK_PERCENTAGE = 0.5  # the percentage of suffixes that will be drawn from $suffixes instead of being generated randomly
+
 my_program = os.environ.get("PROGRAM", "./program.out")
 # CHARSET = (
 #     string.printable
@@ -40,8 +44,9 @@ CHARSET = [
 ]
 
 
-queue = set([""])
+queue = set([""] + CHARSET)
 used: dict[str, set[str]] = defaultdict(set)
+suffixes = set([])
 
 
 def toc(text, color):
@@ -172,9 +177,14 @@ def validate_prog(input_str, log_level):
         return "wrong", -1, ""
 
 
-def get_next_char(prefix: str, log_level: int = 0) -> str | None:
+def get_next_char(
+    prefix: str, log_level: int = 0, check_used: bool = True
+) -> str | None:
     global used
     my_charset = [c for c in CHARSET if c not in used[prefix]]
+
+    if not check_used:
+        my_charset = CHARSET
 
     if len(my_charset) == 0:
         return None
@@ -196,7 +206,7 @@ def get_expanded_string(
     res = prefix
 
     for _ in range(expand_length):
-        input_char = get_next_char(res, log_level)
+        input_char = get_next_char(res, log_level, check_used=False)
         if input_char is None:
             return res
         res += input_char
@@ -227,44 +237,54 @@ def generate(log_level, seed_str: str = "") -> str | None:
             backtracked = True
             prev_str = prev_str[0:-1]
 
-        char = get_next_char(prev_str, log_level)
+        # generate suffixes
+        curr_suffixes = []
 
-        if char is None:
-            return None
+        for i in range(SAMPLE_COUNT):
+            # draw from the bank if we haven't exhausted it yet
+            if i < SAMPLE_COUNT * BANK_PERCENTAGE:
+                remaining_suffixes = [s for s in suffixes if s not in curr_suffixes]
+                if remaining_suffixes:
+                    curr_suffixes.append(random.choice(remaining_suffixes))
+                else:
+                    curr_suffixes.append(get_expanded_string(""))
+            else:
+                curr_suffixes.append(get_expanded_string(""))
 
-        curr_str = prev_str + str(char)
-        rv, n, c = validate_prog(curr_str, log_level)
-        if log_level:
+        for suffix in curr_suffixes:
+            curr_str = prev_str + suffix
+            rv, n, c = validate_prog(curr_str, log_level)
+            if log_level:
+                if rv == "complete":
+                    print(
+                        "%s n=%d, c=%s. Input string is %s"
+                        % (rv, n, c, toc(repr(curr_str), "green"))
+                    )
+                elif rv == "incomplete":
+                    print(
+                        "%s n=%d, c=%s. Input string is %s"
+                        % (rv, n, c, toc(repr(curr_str), "yellow"))
+                    )
+                elif rv == "incorrect":
+                    print(
+                        "%s n=%d, c=%s. Input string is %s"
+                        % (rv, n, c, toc(repr(curr_str), "red"))
+                    )
             if rv == "complete":
-                print(
-                    "%s n=%d, c=%s. Input string is %s"
-                    % (rv, n, c, toc(repr(curr_str), "green"))
-                )
-            elif rv == "incomplete":
-                print(
-                    "%s n=%d, c=%s. Input string is %s"
-                    % (rv, n, c, toc(repr(curr_str), "yellow"))
-                )
-            elif rv == "incorrect":
-                print(
-                    "%s n=%d, c=%s. Input string is %s"
-                    % (rv, n, c, toc(repr(curr_str), "red"))
-                )
-        if rv == "complete":
-            queue.add(curr_str)
-            return curr_str
-        elif rv == "incomplete":  # go ahead...
-            queue.add(curr_str)
-            return None
-        elif (
-            rv == "incorrect"
-        ):  # try again with a new random character do not save current character
-            if curr_str in queue:
-                queue.remove(curr_str)
-            continue
-        else:
-            print("ERROR: Unknown")
-            break
+                queue.add(curr_str)
+                return curr_str
+            elif rv == "incomplete":  # go ahead...
+                queue.add(curr_str)
+                return None
+            elif (
+                rv == "incorrect"
+            ):  # try again with a new random character do not save current character
+                if curr_str in queue:
+                    queue.remove(curr_str)
+                continue
+            else:
+                print("ERROR: Unknown")
+                break
     return None
 
 
