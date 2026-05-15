@@ -29,10 +29,6 @@ CHARSET = [
     "]",
     "{",
     "}",
-    "(",
-    ")",
-    "<",
-    ">",
     "1",
     "0",
     "a",
@@ -93,88 +89,28 @@ def get_instructions(input_string):
     return instructions, result.returncode
 
 
-def validate_prog(input_str, log_level):
+def validate_prog(input_str, log_level) -> tuple[str, int, int]:
     try:
-        instructions_extended = None
-        instructions_current = None
+        instructions, ret_code = get_instructions(input_str)
+        if instructions is None:
+            raise Exception("Could not parse instruction count")
 
-        instructions_current_count = 0
-        instructions_current_total = 0
-        return_codes = 0
-        for _ in range(COUNT):
-            instructions_current, returncode_current = get_instructions(input_str)
-            if instructions_current is None:
-                if log_level:
-                    print("Could not parse instruction count")
-                continue
-            return_codes += returncode_current
-            instructions_current_count += 1
-            instructions_current_total += instructions_current
-        if return_codes == 0:
+        if ret_code == 0:
             if log_level:
                 print(("Program returned 0 - complete"))  # , 'green'))
-            return "complete", 0, ""
+            return "complete", instructions, ret_code
 
-        if instructions_current_count == 0:
-            if log_level:
-                print("Could not parse instruction count")
-            return "wrong", 101, ""
-        avg_instructions_current = (
-            instructions_current_total * 1.0 / instructions_current_count
-        )
-
-        # Get instruction count for extended input (with arbitrary character)
-        instructions_extended_total = 0
-        instructions_extended_count = 0
-
-        for _ in range(COUNT):
-            c = get_next_char(log_level, input_str)
-            if c is None:
-                continue
-
-            extended_input = input_str + c
-            instructions_extended, _returncode_extended = get_instructions(
-                extended_input
-            )
-            if instructions_extended is None:
-                continue
-            instructions_extended_total += instructions_extended
-            instructions_extended_count += 1
-
-        if instructions_extended_total == 0:
-            if log_level:
-                print("Could not parse instruction count for extended input")
-            return "wrong", 102, ""
-
-        avg_instructions_extended = (
-            instructions_extended_total * 1.0 / instructions_extended_count
-        )
-
-        if abs(avg_instructions_extended - avg_instructions_current) > MIN_INCREASE:
-            if log_level:
-                print(
-                    (
-                        f"Instructions increased: {instructions_extended} > {instructions_current} - incomplete"
-                    )
-                )  # , 'yellow'))
-            return "incomplete", -1, ""
-        else:
-            if log_level:
-                print(
-                    (
-                        f"Instructions did not increase: {instructions_extended} <= {instructions_current} - incorrect"
-                    )
-                )  # , 'red'))
-            return "incorrect", 1, ""
-
+        # if log_level:
+        #     print(f"Program returned {ret_code}")
+        return "wrong", instructions, ret_code
     except subprocess.TimeoutExpired:
         if log_level:
             print("Command timed out")
-        return "wrong", -1, ""
+        return "wrong", -1, -1
     except Exception as e:
         if log_level:
             print(f"Error running command: {e}")
-        return "wrong", -1, ""
+        return "wrong", -1, -1
 
 
 def get_next_char(
@@ -214,94 +150,137 @@ def get_expanded_string(
     return res
 
 
-def generate(log_level, seed_str: str = "") -> str | None:
+def log_program_result(curr_str, rv: str, n: int, c: int) -> None:
+    if rv == "complete":
+        print(
+            "%s n=%d, c=%s. Input string is %s"
+            % (rv, n, c, toc(repr(curr_str), "green"))
+        )
+    elif rv == "incomplete":
+        print(
+            "%s n=%d, c=%s. Input string is %s"
+            % (rv, n, c, toc(repr(curr_str), "yellow"))
+        )
+    elif rv == "wrong":
+        print(
+            "%s n=%d, c=%s. Input string is %s" % (rv, n, c, toc(repr(curr_str), "red"))
+        )
+
+
+def minimise_suffix(
+    prefix: str, suffix: str, log_level: int = 0
+) -> tuple[list[str], str, int]:
+    """ """
+    accepted = []
+    curr_suffix = suffix
+    best_suffix = suffix
+    best_diff = 0
+
+    _, base_instructions, _ = validate_prog(prefix, log_level)
+
+    expanded_length = len(suffix)
+
+    while expanded_length and curr_suffix != "":
+        curr_str = prefix + curr_suffix
+        rv, n, c = validate_prog(curr_str, log_level)
+        diff = abs(n - base_instructions)
+
+        if log_level:
+            log_program_result(curr_str, rv, n, c)
+            print(f"diff={diff}")
+
+        if diff >= best_diff:
+            best_diff = diff
+            best_suffix = curr_suffix
+
+        if rv == "complete":
+            accepted.append(curr_str)
+
+        if diff == 0 and rv != "complete":
+            break
+
+        expanded_length = expanded_length // 2
+        curr_suffix = curr_suffix[:expanded_length]
+
+    return accepted, best_suffix, best_diff
+
+
+def generate(log_level, seed_str: str = "") -> list[str]:
     """
     Feed the seed string with a long addition.
-    If it's rejected/
     """
-    global queue, used
+    global queue, used, suffixes
 
     prev_str = seed_str
-    backtracked = False
 
-    while True:
-        # allow one backtracking.
-        if len(used[seed_str]) == len(CHARSET):
-            del used[seed_str]
+    curr_suffixes = []
+    res = []
 
-            if seed_str in queue:
-                queue.remove(seed_str)
-
-            if backtracked:
-                return None
-            backtracked = True
-            prev_str = prev_str[0:-1]
-
-        # generate suffixes
-        curr_suffixes = []
-
-        for i in range(SAMPLE_COUNT):
-            # draw from the bank if we haven't exhausted it yet
-            if i < SAMPLE_COUNT * BANK_PERCENTAGE:
-                remaining_suffixes = [s for s in suffixes if s not in curr_suffixes]
-                if remaining_suffixes:
-                    curr_suffixes.append(random.choice(remaining_suffixes))
-                else:
-                    curr_suffixes.append(get_expanded_string(""))
+    for i in range(SAMPLE_COUNT):
+        # draw from the bank if we haven't exhausted it yet
+        if i < SAMPLE_COUNT * BANK_PERCENTAGE:
+            remaining_suffixes = [s for s in suffixes if s not in curr_suffixes]
+            if remaining_suffixes:
+                curr_suffixes.append(random.choice(remaining_suffixes))
             else:
                 curr_suffixes.append(get_expanded_string(""))
+        else:
+            curr_suffixes.append(get_expanded_string(""))
 
-        for suffix in curr_suffixes:
-            curr_str = prev_str + suffix
-            rv, n, c = validate_prog(curr_str, log_level)
-            if log_level:
-                if rv == "complete":
-                    print(
-                        "%s n=%d, c=%s. Input string is %s"
-                        % (rv, n, c, toc(repr(curr_str), "green"))
-                    )
-                elif rv == "incomplete":
-                    print(
-                        "%s n=%d, c=%s. Input string is %s"
-                        % (rv, n, c, toc(repr(curr_str), "yellow"))
-                    )
-                elif rv == "incorrect":
-                    print(
-                        "%s n=%d, c=%s. Input string is %s"
-                        % (rv, n, c, toc(repr(curr_str), "red"))
-                    )
-            if rv == "complete":
-                queue.add(curr_str)
-                return curr_str
-            elif rv == "incomplete":  # go ahead...
-                queue.add(curr_str)
-                return None
-            elif (
-                rv == "incorrect"
-            ):  # try again with a new random character do not save current character
-                if curr_str in queue:
-                    queue.remove(curr_str)
-                continue
-            else:
-                print("ERROR: Unknown")
-                break
-    return None
+    best_suffixes = []
+
+    for suffix in curr_suffixes:
+        accepted, best_suffix, best_diff = minimise_suffix(
+            prev_str, suffix, log_level=log_level
+        )
+        if accepted:
+            res += accepted
+
+        best_suffixes.append((best_suffix, best_diff))
+
+    max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
+
+    if max_best_diff == 0 and len(res) == 0:
+        print("Invalid prefix: %s" % toc(repr(seed_str), "red"))
+
+        to_remove = set()
+
+        for val in queue:
+            if val.startswith(seed_str):
+                to_remove.add(val)
+
+        queue.difference_update(to_remove)
+    elif max_best_diff > 0:
+        print("Incomplete: %s" % toc(repr(seed_str), "yellow"))
+
+        for suffix, diff in best_suffixes:
+            queue.add(seed_str + suffix)
+
+            if diff == max_best_diff:
+                suffixes.add(suffix)
+
+    for val in res:
+        queue.add(val)
+
+    return res
 
 
 def create_valid_strings(n, log_level):
-    # tic = time.time()
 
     with open("valid_inputs.txt", "w") as myfile:
         myfile.write("")
         myfile.close()
 
     while True:
+        if len(queue) == 0:
+            print("Queue empty, returning")
+            return
+
         prev_str = random.choice(list(queue))
-        created_string = generate(log_level, prev_str)
-        # toc = time.time()
-        if created_string is not None:
+        created_strings = generate(log_level, prev_str)
+        for created_string in created_strings:
             with open("valid_inputs.txt", "a") as myfile:
-                myfile.write(created_string + "\n")
+                myfile.write(repr(created_string) + "\n")
                 myfile.close()
 
 
