@@ -6,41 +6,41 @@
 import json
 import os
 import random
+import string
 import subprocess
 from collections import defaultdict
 
-# import string
 # import time
 
 MAX_STRINGS = 10000
 COUNT = 1
 MIN_INCREASE = 10
-LENGTH_INCREASE = 64
+LENGTH_INCREASE = 16
 
 SAMPLE_COUNT = 10
 BANK_PERCENTAGE = 0.5  # the percentage of suffixes that will be drawn from $suffixes instead of being generated randomly
 
 my_program = os.environ.get("PROGRAM", "./program.out")
-# CHARSET = (
-#     string.printable
-# )  # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
-CHARSET = [
-    "[",
-    "]",
-    "{",
-    "}",
-    "1",
-    "0",
-    "a",
-    "b",
-    ":",
-    '"',
-    ",",
-    ".",
-]
+CHARSET = (
+    string.printable
+)  # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
+# CHARSET = [
+#     "[",
+#     "]",
+#     "{",
+#     "}",
+#     "1",
+#     "0",
+#     "a",
+#     "b",
+#     ":",
+#     '"',
+#     ",",
+#     ".",
+# ]
 
 
-queue = set([""] + CHARSET)
+queue = set([""] + list(CHARSET))
 used: dict[str, set[str]] = defaultdict(set)
 suffixes = set([])
 
@@ -92,8 +92,9 @@ def get_instructions(input_string):
 def validate_prog(input_str, log_level) -> tuple[str, int, int]:
     try:
         instructions, ret_code = get_instructions(input_str)
+
         if instructions is None:
-            raise Exception("Could not parse instruction count")
+            raise Exception(f"Could not parse instruction count for {repr(input_str)}")
 
         if ret_code == 0:
             if log_level:

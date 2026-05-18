@@ -11,3 +11,4 @@ compile_commands.json
 .pi/
 scratch/**
 notes/**
+invalid_prefixes.txt
