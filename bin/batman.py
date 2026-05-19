@@ -154,20 +154,23 @@ def get_expanded_string(
 
 def log_program_result(curr_str, rv: str, n: int, c: int) -> None:
     if rv == "complete":
+        print(" " * 80, end="\r", flush=True)  # clear the \r line
         print(
             "%s n=%d, c=%s. Input string is %s"
             % (rv, n, c, toc(repr(curr_str), "green"))
         )
     elif rv == "incomplete":
+        print(" " * 80, end="\r", flush=True)  # clear the \r line
         print(
             "%s n=%d, c=%s. Input string is %s"
             % (rv, n, c, toc(repr(curr_str), "yellow"))
         )
     elif rv == "wrong":
         print(
-            "%s n=%d, c=%s. Input string is %s" % (rv, n, c, toc(repr(curr_str), "red"))
+            "%s n=%d, c=%s. Input string is %s" # % (rv, n, c, toc(repr(curr_str), "red"))
+            % (rv, n, c, toc(repr(curr_str), "red")),
+            end="\r", flush=True
         )
-
 
 def minimise_suffix(
     prefix: str, suffix: str, log_level: int = 0
@@ -202,7 +205,7 @@ def minimise_suffix(
 
         if log_level:
             log_program_result(curr_str, rv, n, c)
-            print(f"diff={diff}")
+            # print(f"diff={diff}")
 
         if diff >= best_diff:
             best_diff = diff
