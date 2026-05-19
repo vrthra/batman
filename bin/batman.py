@@ -260,8 +260,8 @@ def generate(log_level, seed_str: str = "") -> list[str]:
             if diff == max_best_diff:
                 suffixes.add(suffix)
 
-    for val in res:
-        queue.add(val)
+        for val in res:
+            queue.add(val)
 
     return res
 
