@@ -78,6 +78,6 @@ int main(int argc, char *argv[]) {
     strip_input(my_string);
   }
   printf("val: <%s>\n", my_string);
-  ret = cgi_decode(my_string, &result);
+  ret = cgi_decode(my_string, result);
   return ret;
 }
