@@ -3,7 +3,7 @@ I=a
 .SECONDARY:
 
 %.out: src/%.c
-	cc -g -o $@ $^ -I include
+	clang -g -o $@ $^ -I include -O0 -fprofile-instr-generate -fcoverage-mapping
 
 %.count: %.out
 	@sudo /usr/bin/perf stat -e instructions:u ./$< '$(I)'  2>&1 | grep instructions
@@ -34,5 +34,3 @@ run.calc_parse: calc_parse.out
 
 get:
 	wget https://raw.githubusercontent.com/vrthra/mimid/refs/heads/master/Cmimid/examples/vector.h
-
-

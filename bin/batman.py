@@ -3,25 +3,33 @@
 # import pudb
 # bp = pudb.set_trace
 
+import json
 import os
 import random
+
+# import string
 import subprocess
-import time
+from collections import defaultdict
+
+# import time
 
 MAX_STRINGS = 10000
-COUNT = 10
+COUNT = 1
 MIN_INCREASE = 10
+LENGTH_INCREASE = 64
+
+SAMPLE_COUNT = 10
+BANK_PERCENTAGE = 0.5  # the percentage of suffixes that will be drawn from $suffixes instead of being generated randomly
+
 my_program = os.environ.get("PROGRAM", "./program.out")
-# CHARSET = string.printable # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
+# CHARSET = (
+#     string.printable
+# )  # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
 CHARSET = [
     "[",
     "]",
     "{",
     "}",
-    "(",
-    ")",
-    "<",
-    ">",
     "1",
     "0",
     "a",
@@ -30,8 +38,12 @@ CHARSET = [
     '"',
     ",",
     ".",
-    "'",
 ]
+
+
+queue = set([""] + list(CHARSET))
+used: dict[str, set[str]] = defaultdict(set)
+suffixes = set([])
 
 
 def toc(text, color):
@@ -53,184 +65,237 @@ def toc(text, color):
         return text
 
 
+def extract_blocks_from_json(json_file: str = "/tmp/tmp.json") -> int | None:
+    data = json.load(open(json_file))
+
+    total = 0
+    for f in data["data"][0]["functions"]:
+        for b in f.get("regions", []):
+            total += b[4]
+
+    return total if total > 0 else None
+
+
 # Run perf and extract instruction count
 def get_instructions(input_string):
     cmd = [
-        "sudo",
-        "/usr/bin/perf",
-        "stat",
-        "-e",
-        "instructions:u",
+        "bash",
+        "bin/handle_coverage.sh",
         my_program,
-        input_string,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-    for line in result.stderr.split("\n"):
-        if "instructions:u" not in line:
-            continue
-        parts = line.strip().split()
-        if not parts:
-            continue
-        try:
-            return int(parts[0].replace(",", "")), result.returncode
-        except ValueError:
-            return None, result.returncode
-    return None, result.returncode
+    result = subprocess.run(
+        cmd, capture_output=True, text=True, timeout=5, input=input_string
+    )
+    instructions = extract_blocks_from_json()
+    return instructions, result.returncode
 
 
-def validate_prog(input_str, log_level):
+def validate_prog(input_str, log_level: int = 0) -> tuple[str, int, int]:
     try:
-        instructions_extended = None
-        instructions_current = None
+        instructions, ret_code = get_instructions(input_str)
 
-        instructions_current_count = 0
-        instructions_current_total = 0
-        return_codes = 0
-        for i in range(COUNT):
-            instructions_current, returncode_current = get_instructions(input_str)
-            if instructions_current is None:
-                if log_level:
-                    print("Could not parse instruction count")
-                continue
-            return_codes += returncode_current
-            instructions_current_count += 1
-            instructions_current_total += instructions_current
-        if return_codes == 0:
+        if instructions is None:
+            raise Exception(f"Could not parse instruction count for {repr(input_str)}")
+
+        if ret_code == 0:
             if log_level:
                 print(("Program returned 0 - complete"))  # , 'green'))
-            return "complete", 0, ""
+            return "complete", instructions, ret_code
 
-        if instructions_current_count == 0:
-            if log_level:
-                print("Could not parse instruction count")
-            return "wrong", 101, ""
-        avg_instructions_current = (
-            instructions_current_total * 1.0 / instructions_current_count
-        )
-
-        # Get instruction count for extended input (with arbitrary character)
-        instructions_extended_total = 0
-        instructions_extended_count = 0
-        used = []
-        for i in range(COUNT):
-            c = get_next_char(log_level, used)
-            extended_input = input_str + c
-            instructions_extended, returncode_extended = get_instructions(
-                extended_input
-            )
-            if instructions_extended is None:
-                continue
-            instructions_extended_total += instructions_extended
-            instructions_extended_count += 1
-
-        if instructions_extended_total == 0:
-            if log_level:
-                print("Could not parse instruction count for extended input")
-            return "wrong", 102, ""
-
-        avg_instructions_extended = (
-            instructions_extended_total * 1.0 / instructions_extended_count
-        )
-
-        if (avg_instructions_extended - avg_instructions_current) > MIN_INCREASE:
-            if log_level:
-                print(
-                    (
-                        f"Instructions increased: {instructions_extended} > {instructions_current} - incomplete"
-                    )
-                )  # , 'yellow'))
-            return "incomplete", -1, ""
-        else:
-            if log_level:
-                print(
-                    (
-                        f"Instructions did not increase: {instructions_extended} <= {instructions_current} - incorrect"
-                    )
-                )  # , 'red'))
-            return "incorrect", 1, ""
-
+        # if log_level:
+        #     print(f"Program returned {ret_code}")
+        return "wrong", instructions, ret_code
     except subprocess.TimeoutExpired:
         if log_level:
             print("Command timed out")
-        return "wrong", -1, ""
+        return "wrong", -1, -1
     except Exception as e:
         if log_level:
             print(f"Error running command: {e}")
-        return "wrong", -1, ""
+        return "wrong", -1, -1
 
 
-def get_next_char(log_level, used):
-    my_charset = [c for c in CHARSET if c not in used]
+def get_next_char(
+    prefix: str, log_level: int = 0, check_used: bool = True
+) -> str | None:
+    global used
+    my_charset = [c for c in CHARSET if c not in used[prefix]]
+
+    if not check_used:
+        my_charset = CHARSET
+
+    if len(my_charset) == 0:
+        return None
+
     idx = random.randrange(0, len(my_charset), 1)
     input_char = my_charset[idx]
-    used.append(input_char)
+    used[prefix].add(input_char)
     # if (log_level):
     # print(input_char)
     return input_char
 
 
-def generate(log_level):
-    """
-    Feed it one character at a time, and see if the parser rejects it.
-    If it does not, then append one more character and continue.
-    If it rejects, replace with another character in the set.
-    :returns completed string
-    """
-    prev_str = ""
-    used = []
-    while True:
-        # allow one backtracking.
-        if len(used) == len(CHARSET):
-            prev_str = prev_str[0:-1]
-            used = []
-        char = get_next_char(log_level, used)
-        curr_str = prev_str + str(char)
-        rv, n, c = validate_prog(curr_str, log_level)
-        if log_level:
-            if rv == "complete":
-                print(
-                    "%s n=%d, c=%s. Input string is %s"
-                    % (rv, n, c, toc(repr(curr_str), "green"))
-                )
-            elif rv == "incomplete":
-                print(
-                    "%s n=%d, c=%s. Input string is %s"
-                    % (rv, n, c, toc(repr(curr_str), "yellow"))
-                )
-            elif rv == "incorrect":
-                print(
-                    "%s n=%d, c=%s. Input string is %s"
-                    % (rv, n, c, toc(repr(curr_str), "red"))
-                )
-        if rv == "complete":
-            return curr_str
-        elif rv == "incomplete":  # go ahead...
-            used = []
-            prev_str = curr_str
-            continue
-        elif (
-            rv == "incorrect"
-        ):  # try again with a new random character do not save current character
-            continue
-        else:
-            print("ERROR What is this I dont know !!!")
+def get_expanded_string(
+    prefix: str, expand_length: int = LENGTH_INCREASE, log_level: int = 0
+) -> str:
+    if log_level:
+        print(f"Expanding string: {prefix}")
+
+    res = prefix
+
+    for _ in range(expand_length):
+        input_char = get_next_char(res, log_level, check_used=False)
+        if input_char is None:
+            return res
+        res += input_char
+
+    return res
+
+
+def log_program_result(curr_str, rv: str, n: int, c: int) -> None:
+    if rv == "complete":
+        print(
+            "%s n=%d, c=%s. Input string is %s"
+            % (rv, n, c, toc(repr(curr_str), "green"))
+        )
+    elif rv == "incomplete":
+        print(
+            "%s n=%d, c=%s. Input string is %s"
+            % (rv, n, c, toc(repr(curr_str), "yellow"))
+        )
+    elif rv == "wrong":
+        print(
+            "%s n=%d, c=%s. Input string is %s" % (rv, n, c, toc(repr(curr_str), "red"))
+        )
+
+
+def minimise_suffix(
+    prefix: str, suffix: str, log_level: int = 0
+) -> tuple[list[str], str, int]:
+    """ """
+    accepted = []
+    best_suffix = suffix
+
+    _, base_instructions, _ = validate_prog(prefix)
+    expanded_rv, expanded_instructions, expanded_c = validate_prog(prefix + suffix)
+
+    if log_level:
+        log_program_result(
+            prefix + suffix, expanded_rv, expanded_instructions, expanded_c
+        )
+
+    best_diff = abs(expanded_instructions - base_instructions)
+
+    min_length = 0
+    max_length = len(suffix)
+
+    while min_length < max_length:
+        expanded_length = min_length + (max_length - min_length) // 2
+
+        if expanded_length == 0:
             break
-    return None
+
+        curr_str = prefix + suffix[:expanded_length]
+        rv, n, c = validate_prog(curr_str)
+
+        diff = abs(n - base_instructions)
+
+        if log_level:
+            log_program_result(curr_str, rv, n, c)
+            print(f"diff={diff}")
+
+        if diff >= best_diff:
+            best_diff = diff
+            best_suffix = suffix[:expanded_length]
+            max_length = expanded_length
+        else:
+            min_length = expanded_length + 1
+
+        if rv == "complete":
+            accepted.append(curr_str)
+
+        if diff == 0 and rv != "complete":
+            break
+
+    return accepted, best_suffix, best_diff
+
+
+def generate(log_level, seed_str: str = "") -> list[str]:
+    """
+    Feed the seed string with a long addition.
+    """
+    global queue, used, suffixes
+
+    prev_str = seed_str
+
+    curr_suffixes = []
+    res = []
+
+    for i in range(SAMPLE_COUNT):
+        # draw from the bank if we haven't exhausted it yet
+        if i < SAMPLE_COUNT * BANK_PERCENTAGE:
+            remaining_suffixes = [s for s in suffixes if s not in curr_suffixes]
+            if remaining_suffixes:
+                curr_suffixes.append(random.choice(remaining_suffixes))
+            else:
+                curr_suffixes.append(get_expanded_string(""))
+        else:
+            curr_suffixes.append(get_expanded_string(""))
+
+    best_suffixes = []
+
+    for suffix in curr_suffixes:
+        accepted, best_suffix, best_diff = minimise_suffix(
+            prev_str, suffix, log_level=log_level
+        )
+        if accepted:
+            res += accepted
+
+        best_suffixes.append((best_suffix, best_diff))
+
+    max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
+
+    if max_best_diff == 0 and len(res) == 0:
+        print("Invalid prefix: %s" % toc(repr(seed_str), "red"))
+
+        to_remove = set()
+
+        for val in queue:
+            if val.startswith(seed_str):
+                to_remove.add(val)
+
+        queue.difference_update(to_remove)
+    elif max_best_diff > 0:
+        print("Incomplete: %s" % toc(repr(seed_str), "yellow"))
+
+        for suffix, diff in best_suffixes:
+            queue.add(seed_str + suffix)
+
+            if diff == max_best_diff:
+                suffixes.add(suffix)
+
+        for val in res:
+            queue.add(val)
+
+    return res
 
 
 def create_valid_strings(n, log_level):
-    tic = time.time()
+
+    with open("valid_inputs.txt", "w") as myfile:
+        myfile.write("")
+        myfile.close()
+
     while True:
-        created_string = generate(log_level)
-        toc = time.time()
-        if created_string is not None:
+        if len(queue) == 0:
+            print("Queue empty, returning")
+            return
+
+        prev_str = random.choice(list(queue))
+        created_strings = generate(log_level, prev_str)
+        for created_string in created_strings:
             with open("valid_inputs.txt", "a") as myfile:
-                var = (
-                    f"Time used until input was generated: {toc - tic:f}\n"
-                    + repr(created_string)
-                    + "\n\n"
-                )
-                myfile.write(var)
+                myfile.write(repr(created_string) + "\n")
                 myfile.close()
 
 
