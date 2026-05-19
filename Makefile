@@ -3,7 +3,7 @@ I=a
 .SECONDARY:
 
 %.out: src/%.c
-	cc -g -o $@ $^ -I include -O0 -fprofile-instr-generate -fcoverage-mapping
+	clang -g -o $@ $^ -I include -O0 -fprofile-instr-generate -fcoverage-mapping
 
 %.count: %.out
 	@sudo /usr/bin/perf stat -e instructions:u ./$< '$(I)'  2>&1 | grep instructions
