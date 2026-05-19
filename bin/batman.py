@@ -16,7 +16,7 @@ from collections import defaultdict
 MAX_STRINGS = 10000
 COUNT = 1
 MIN_INCREASE = 10
-LENGTH_INCREASE = 16
+LENGTH_INCREASE = 64
 
 SAMPLE_COUNT = 10
 BANK_PERCENTAGE = 0.5  # the percentage of suffixes that will be drawn from $suffixes instead of being generated randomly
