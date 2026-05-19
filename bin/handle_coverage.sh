@@ -7,9 +7,9 @@ rm -f /tmp/tmp.profraw /tmp/tmp.profdata
 LLVM_PROFILE_FILE=/tmp/tmp.profraw "./$bin" "${@}" >/dev/null
 RET_CODE=$?
 
-xcrun llvm-profdata merge /tmp/tmp.profraw -o /tmp/tmp.profdata
+llvm-profdata-18 merge /tmp/tmp.profraw -o /tmp/tmp.profdata
 
-xcrun llvm-cov export "$bin" \
+llvm-cov-18 export "$bin" \
     -instr-profile=/tmp/tmp.profdata \
     --format=text > /tmp/tmp.json
 
