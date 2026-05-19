@@ -89,7 +89,7 @@ def get_instructions(input_string):
     return instructions, result.returncode
 
 
-def validate_prog(input_str, log_level) -> tuple[str, int, int]:
+def validate_prog(input_str, log_level: int = 0) -> tuple[str, int, int]:
     try:
         instructions, ret_code = get_instructions(input_str)
 
@@ -173,17 +173,24 @@ def minimise_suffix(
 ) -> tuple[list[str], str, int]:
     """ """
     accepted = []
-    curr_suffix = suffix
     best_suffix = suffix
-    best_diff = 0
 
-    _, base_instructions, _ = validate_prog(prefix, log_level)
+    _, base_instructions, _ = validate_prog(prefix)
+    _, expanded_instructions, _ = validate_prog(prefix + suffix)
 
-    expanded_length = len(suffix)
+    best_diff = abs(expanded_instructions - base_instructions)
 
-    while expanded_length and curr_suffix != "":
-        curr_str = prefix + curr_suffix
-        rv, n, c = validate_prog(curr_str, log_level)
+    min_length = 0
+    max_length = len(suffix)
+
+    while min_length < max_length:
+        expanded_length = min_length + (max_length - min_length) // 2
+
+        if expanded_length == 0:
+            break
+
+        curr_str = prefix + suffix[:expanded_length]
+        rv, n, c = validate_prog(curr_str)
         diff = abs(n - base_instructions)
 
         if log_level:
@@ -192,16 +199,16 @@ def minimise_suffix(
 
         if diff >= best_diff:
             best_diff = diff
-            best_suffix = curr_suffix
+            best_suffix = suffix[:expanded_length]
+            max_length = expanded_length
+        else:
+            min_length = expanded_length + 1
 
         if rv == "complete":
             accepted.append(curr_str)
 
         if diff == 0 and rv != "complete":
             break
-
-        expanded_length = expanded_length // 2
-        curr_suffix = curr_suffix[:expanded_length]
 
     return accepted, best_suffix, best_diff
 
