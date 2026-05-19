@@ -79,7 +79,7 @@ def extract_blocks_from_json(json_file: str = "/tmp/tmp.json") -> int | None:
 # Run perf and extract instruction count
 def get_instructions(input_string):
     cmd = [
-        "sh",
+        "bash",
         "bin/handle_coverage.sh",
         my_program,
     ]
