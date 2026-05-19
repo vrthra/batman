@@ -10,7 +10,7 @@ RET_CODE=$?
 if [ "$(uname)" = "Linux" ]; then
   llvm-profdata-18 merge /tmp/tmp.profraw -o /tmp/tmp.profdata
 else
-  llvm-profdata merge /tmp/tmp.profraw -o /tmp/tmp.profdata
+  xcrun llvm-profdata merge /tmp/tmp.profraw -o /tmp/tmp.profdata
 fi
 
 if [ "$(uname)" = "Linux" ]; then
@@ -18,7 +18,7 @@ if [ "$(uname)" = "Linux" ]; then
       -instr-profile=/tmp/tmp.profdata \
       --format=text > /tmp/tmp.json
 else
-  llvm-cov export "$bin" \
+  xcrun llvm-cov export "$bin" \
       -instr-profile=/tmp/tmp.profdata \
       --format=text > /tmp/tmp.json
 fi
