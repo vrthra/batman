@@ -6,7 +6,8 @@
 import json
 import os
 import random
-import string
+
+# import string
 import subprocess
 from collections import defaultdict
 
@@ -21,23 +22,23 @@ SAMPLE_COUNT = 10
 BANK_PERCENTAGE = 0.5  # the percentage of suffixes that will be drawn from $suffixes instead of being generated randomly
 
 my_program = os.environ.get("PROGRAM", "./program.out")
-CHARSET = (
-    string.printable
-)  # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
-# CHARSET = [
-#     "[",
-#     "]",
-#     "{",
-#     "}",
-#     "1",
-#     "0",
-#     "a",
-#     "b",
-#     ":",
-#     '"',
-#     ",",
-#     ".",
-# ]
+# CHARSET = (
+#     string.printable
+# )  # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
+CHARSET = [
+    "[",
+    "]",
+    "{",
+    "}",
+    "1",
+    "0",
+    "a",
+    "b",
+    ":",
+    '"',
+    ",",
+    ".",
+]
 
 
 queue = set([""] + list(CHARSET))
@@ -176,7 +177,12 @@ def minimise_suffix(
     best_suffix = suffix
 
     _, base_instructions, _ = validate_prog(prefix)
-    _, expanded_instructions, _ = validate_prog(prefix + suffix)
+    expanded_rv, expanded_instructions, expanded_c = validate_prog(prefix + suffix)
+
+    if log_level:
+        log_program_result(
+            prefix + suffix, expanded_rv, expanded_instructions, expanded_c
+        )
 
     best_diff = abs(expanded_instructions - base_instructions)
 
@@ -191,6 +197,7 @@ def minimise_suffix(
 
         curr_str = prefix + suffix[:expanded_length]
         rv, n, c = validate_prog(curr_str)
+
         diff = abs(n - base_instructions)
 
         if log_level:
