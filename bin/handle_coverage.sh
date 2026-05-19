@@ -7,10 +7,20 @@ rm -f /tmp/tmp.profraw /tmp/tmp.profdata
 LLVM_PROFILE_FILE=/tmp/tmp.profraw "./$bin" "${@}" >/dev/null
 RET_CODE=$?
 
-llvm-profdata merge /tmp/tmp.profraw -o /tmp/tmp.profdata
+if [[ "$(uname)" == "Linux" ]]; then
+  llvm-profdata-18 merge /tmp/tmp.profraw -o /tmp/tmp.profdata
+else
+  llvm-profdata merge /tmp/tmp.profraw -o /tmp/tmp.profdata
+fi
 
-llvm-cov export "$bin" \
-    -instr-profile=/tmp/tmp.profdata \
-    --format=text > /tmp/tmp.json
+if [[ "$(uname)" == "Linux" ]]; then
+  llvm-cov-18 export "$bin" \
+      -instr-profile=/tmp/tmp.profdata \
+      --format=text > /tmp/tmp.json
+else
+  llvm-cov export "$bin" \
+      -instr-profile=/tmp/tmp.profdata \
+      --format=text > /tmp/tmp.json
+fi
 
 exit $RET_CODE
