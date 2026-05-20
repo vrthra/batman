@@ -18,7 +18,6 @@ COUNT = 1
 MIN_INCREASE = 10
 LENGTH_INCREASE = 64
 
-SAMPLE_COUNT = 10
 BANK_PERCENTAGE = 0.5  # the percentage of suffixes that will be drawn from $suffixes instead of being generated randomly
 
 my_program = os.environ.get("PROGRAM", "./program.out")
@@ -39,6 +38,7 @@ CHARSET = [
     ",",
     ".",
 ]
+SAMPLE_COUNT = len(CHARSET)
 
 
 queue = set([""] + list(CHARSET))
@@ -153,19 +153,21 @@ def get_expanded_string(
 
 
 def log_program_result(curr_str, rv: str, n: int, c: int) -> None:
+    space_len = len(curr_str) * 2
     if rv == "complete":
-        print(" " * 80, end="\r", flush=True)  # clear the \r line
+        print(" " * space_len, end="\r", flush=True)  # clear the \r line
         print(
             "%s n=%d, c=%s. Input string is %s"
             % (rv, n, c, toc(repr(curr_str), "green"))
         )
     elif rv == "incomplete":
-        print(" " * 80, end="\r", flush=True)  # clear the \r line
+        print(" " * space_len, end="\r", flush=True)  # clear the \r line
         print(
             "%s n=%d, c=%s. Input string is %s"
             % (rv, n, c, toc(repr(curr_str), "yellow"))
         )
     elif rv == "wrong":
+        print(" " * space_len, end="\r", flush=True)  # clear the \r line
         print(
             "%s n=%d, c=%s. Input string is %s"  # % (rv, n, c, toc(repr(curr_str), "red"))
             % (rv, n, c, toc(repr(curr_str), "red")),
@@ -231,13 +233,17 @@ def generate(log_level, seed_str: str = "") -> list[str]:
     """
     global queue, used, suffixes
 
+    print(f"prefix {repr(seed_str)}")
+
     prev_str = seed_str
 
-    curr_suffixes = []
+    best_suffixes = []
     res = []
 
     for char in CHARSET:
-        for i in range(len(CHARSET)):
+        curr_suffixes = []
+
+        for i in range(SAMPLE_COUNT):
             # draw from the bank if we haven't exhausted it yet
             if i < SAMPLE_COUNT * BANK_PERCENTAGE:
                 remaining_suffixes = [s for s in suffixes if s not in curr_suffixes]
@@ -248,40 +254,42 @@ def generate(log_level, seed_str: str = "") -> list[str]:
             else:
                 curr_suffixes.append(get_expanded_string(char))
 
-        best_suffixes = []
-
         for suffix in curr_suffixes:
             accepted, best_suffix, best_diff = minimise_suffix(
                 prev_str, suffix, log_level=log_level
             )
-            if accepted:
-                res += accepted
+
+            for val in accepted:
+                if val not in res:
+                    res.append(val)
 
             best_suffixes.append((best_suffix, best_diff))
 
-        max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
+    max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
 
-        if max_best_diff == 0 and len(res) == 0:
-            print("Invalid prefix: %s" % toc(repr(seed_str), "red"))
+    if max_best_diff == 0 and len(res) == 0:
+        print()
+        print("Invalid prefix: %s" % toc(repr(seed_str), "red"))
 
-            to_remove = set()
+        to_remove = set()
 
-            for val in queue:
-                if val.startswith(seed_str):
-                    to_remove.add(val)
+        for val in queue:
+            if val.startswith(seed_str):
+                to_remove.add(val)
 
-            queue.difference_update(to_remove)
-        elif max_best_diff > 0:
-            print("Incomplete: %s" % toc(repr(seed_str), "yellow"))
+        queue.difference_update(to_remove)
+    elif max_best_diff > 0:
+        print()
+        print("Incomplete: %s" % toc(repr(seed_str), "yellow"))
 
-            for suffix, diff in best_suffixes:
-                queue.add(seed_str + suffix)
+        for suffix, diff in best_suffixes:
+            queue.add(seed_str + suffix)
 
-                if diff == max_best_diff:
-                    suffixes.add(suffix)
+            if diff == max_best_diff:
+                suffixes.add(suffix)
 
-            for val in res:
-                queue.add(val)
+        for val in res:
+            queue.add(val)
 
     return res
 
