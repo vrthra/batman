@@ -167,10 +167,12 @@ def log_program_result(curr_str, rv: str, n: int, c: int) -> None:
         )
     elif rv == "wrong":
         print(
-            "%s n=%d, c=%s. Input string is %s" # % (rv, n, c, toc(repr(curr_str), "red"))
+            "%s n=%d, c=%s. Input string is %s"  # % (rv, n, c, toc(repr(curr_str), "red"))
             % (rv, n, c, toc(repr(curr_str), "red")),
-            end="\r", flush=True
+            end="\r",
+            flush=True,
         )
+
 
 def minimise_suffix(
     prefix: str, suffix: str, log_level: int = 0
@@ -234,51 +236,52 @@ def generate(log_level, seed_str: str = "") -> list[str]:
     curr_suffixes = []
     res = []
 
-    for i in range(SAMPLE_COUNT):
-        # draw from the bank if we haven't exhausted it yet
-        if i < SAMPLE_COUNT * BANK_PERCENTAGE:
-            remaining_suffixes = [s for s in suffixes if s not in curr_suffixes]
-            if remaining_suffixes:
-                curr_suffixes.append(random.choice(remaining_suffixes))
+    for char in CHARSET:
+        for i in range(len(CHARSET)):
+            # draw from the bank if we haven't exhausted it yet
+            if i < SAMPLE_COUNT * BANK_PERCENTAGE:
+                remaining_suffixes = [s for s in suffixes if s not in curr_suffixes]
+                if remaining_suffixes:
+                    curr_suffixes.append(char + random.choice(remaining_suffixes))
+                else:
+                    curr_suffixes.append(get_expanded_string(char))
             else:
-                curr_suffixes.append(get_expanded_string(""))
-        else:
-            curr_suffixes.append(get_expanded_string(""))
+                curr_suffixes.append(get_expanded_string(char))
 
-    best_suffixes = []
+        best_suffixes = []
 
-    for suffix in curr_suffixes:
-        accepted, best_suffix, best_diff = minimise_suffix(
-            prev_str, suffix, log_level=log_level
-        )
-        if accepted:
-            res += accepted
+        for suffix in curr_suffixes:
+            accepted, best_suffix, best_diff = minimise_suffix(
+                prev_str, suffix, log_level=log_level
+            )
+            if accepted:
+                res += accepted
 
-        best_suffixes.append((best_suffix, best_diff))
+            best_suffixes.append((best_suffix, best_diff))
 
-    max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
+        max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
 
-    if max_best_diff == 0 and len(res) == 0:
-        print("Invalid prefix: %s" % toc(repr(seed_str), "red"))
+        if max_best_diff == 0 and len(res) == 0:
+            print("Invalid prefix: %s" % toc(repr(seed_str), "red"))
 
-        to_remove = set()
+            to_remove = set()
 
-        for val in queue:
-            if val.startswith(seed_str):
-                to_remove.add(val)
+            for val in queue:
+                if val.startswith(seed_str):
+                    to_remove.add(val)
 
-        queue.difference_update(to_remove)
-    elif max_best_diff > 0:
-        print("Incomplete: %s" % toc(repr(seed_str), "yellow"))
+            queue.difference_update(to_remove)
+        elif max_best_diff > 0:
+            print("Incomplete: %s" % toc(repr(seed_str), "yellow"))
 
-        for suffix, diff in best_suffixes:
-            queue.add(seed_str + suffix)
+            for suffix, diff in best_suffixes:
+                queue.add(seed_str + suffix)
 
-            if diff == max_best_diff:
-                suffixes.add(suffix)
+                if diff == max_best_diff:
+                    suffixes.add(suffix)
 
-        for val in res:
-            queue.add(val)
+            for val in res:
+                queue.add(val)
 
     return res
 
