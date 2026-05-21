@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
-import json
-import os
-import random
-
-import string
-import subprocess
+import json, os, random, string, subprocess
 from collections import defaultdict
-
-# import time
 
 MAX_STRINGS = 10000
 COUNT = 1
@@ -150,25 +143,25 @@ def get_expanded_string(
 # Prints a color-coded summary line for curr_str based on the program result rv
 # "complete" is green (newline), "incomplete" is yellow (newline), "wrong" is red (overwritten via \r)
 # space_len blanks are printed first to erase the previous \r line
-def log_program_result(curr_str, rv: str, n: int, c: int) -> None:
+def log_program_result(curr_str, rv: str, n: int, c: int, suffix_count: str) -> None:
     space_len = len(curr_str) * 2
     if rv == "complete":
         print(" " * space_len, end="\r", flush=True)  # clear the \r line
         print(
-            "%s instr=%d, exit=%s. Input string is %s"
-            % (rv, n, c, toc(repr(curr_str), "green"))
+            "[%s]\t%s instr=%d, exit=%s. Input string is %s"
+            % (suffix_count, rv, n, c, toc(repr(curr_str), "green"))
         )
     elif rv == "incomplete":
         print(" " * space_len, end="\r", flush=True)  # clear the \r line
         print(
-            "%s instr=%d, exit=%s. Input string is %s"
-            % (rv, n, c, toc(repr(curr_str), "yellow"))
+            "[%s]\t%s instr=%d, exit=%s. Input string is %s"
+            % (suffix_count,rv, n, c, toc(repr(curr_str), "yellow"))
         )
     elif rv == "wrong":
         print(" " * space_len, end="\r", flush=True)  # clear the \r line
         print(
-            "%s instr=%d, exit=%s. Input string is %s"  # % (rv, n, c, toc(repr(curr_str), "red"))
-            % (rv, n, c, toc(repr(curr_str), "red")),
+            "[%s]\t%s instr=%d, exit=%s. Input string is %s"  # % (rv, n, c, toc(repr(curr_str), "red"))
+            % (suffix_count, rv, n, c, toc(repr(curr_str), "red")),
             end="\r",
             flush=True,
         )
@@ -179,7 +172,7 @@ def log_program_result(curr_str, rv: str, n: int, c: int) -> None:
 # accepted collects any complete (exit-0) strings found during the search
 # Returns (accepted, best_suffix, best_diff) where best_diff is the largest coverage delta seen
 def minimise_suffix(
-    prefix: str, suffix: str, log_level: int = 0
+        prefix: str, suffix: str, log_level: int = 0, suffix_count: str = ''
 ) -> tuple[list[str], str, int]:
     accepted = []
     best_suffix = suffix
@@ -190,7 +183,7 @@ def minimise_suffix(
 
     if log_level:
         log_program_result(
-            prefix + suffix, expanded_rv, expanded_instructions, expanded_c
+            prefix + suffix, expanded_rv, expanded_instructions, expanded_c, suffix_count
         )
 
     best_diff = abs(expanded_instructions - base_instructions)
@@ -211,7 +204,7 @@ def minimise_suffix(
         diff = abs(n - base_instructions)
 
         if log_level:
-            log_program_result(curr_str, rv, n, c)
+            log_program_result(curr_str, rv, n, c, suffix_count)
             # print(f"diff={diff}")
 
         # if this shorter suffix still achieves at least best_diff, keep shrinking left
@@ -279,10 +272,13 @@ def generate(log_level, seed_str: str = "") -> list[str]:
     best_suffixes = []
     res = []
 
-    for suffix in MY_SUFFIXES:
+    new_suffixes = list(MY_SUFFIXES)
+    l = len(MY_SUFFIXES)
+    random.shuffle(new_suffixes)
+
+    for i,suffix in enumerate(new_suffixes):
         accepted, best_suffix, best_diff = minimise_suffix(
-                prev_str, suffix, log_level=log_level
-            )
+                prev_str, suffix, log_level=log_level, suffix_count='%d/%d' %(i, l))
 
         for val in accepted:
             if val not in res:
