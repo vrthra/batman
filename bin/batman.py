@@ -279,7 +279,7 @@ def generate(
             seed_str,
             suffix,
             log_level=log_level,
-            suffix_count="%d/%d" % (tried_offset + i, tried_offset + SAMPLES_TO_TEST),
+            suffix_count="%d/%d %d/%d" % (i, SAMPLES_TO_TEST, tried_offset + i, len(MY_SUFFIXES)),
         )
 
         for val in accepted:
