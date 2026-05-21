@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 # coding: utf-8
 
-import json, os, random, string, subprocess
+import json
+import os
+import random
+import string
+import subprocess
 
 MAX_STRINGS = 10000
 COUNT = 1
@@ -11,16 +15,16 @@ LENGTH_INCREASE = 64
 BANK_PERCENTAGE = 0.5  # the percentage of suffixes that will be drawn from $suffixes instead of being generated randomly
 
 my_program = os.environ.get("PROGRAM", "./program.out")
-tmp_JSON = os.environ.get('TMP_JSON', "/tmp/tmp.json")
+tmp_JSON = os.environ.get("TMP_JSON", "/tmp/tmp.json")
 
 CHARSET = list(string.printable)
 SAMPLE_COUNT = len(CHARSET)
 SAMPLES_TO_TEST = 100
 
-_BRACKETS_OPEN  = list('({[<')
-_BRACKETS_CLOSE = list(')}]>')
-_QUOTES         = list('"\'`')
-_OTHER_PUNCT    = list(set(string.punctuation) - set('({[<)}]>') - set('"\'`'))
+_BRACKETS_OPEN = list("({[<")
+_BRACKETS_CLOSE = list(")}]>")
+_QUOTES = list("\"'`")
+_OTHER_PUNCT = list(set(string.punctuation) - set("({[<)}]>") - set("\"'`"))
 
 # Charset categories; each category has equal selection probability,
 # and within a category every character has equal probability — this prevents the
@@ -65,7 +69,7 @@ def toc(text, color):
 
 # Parses the llvm-cov JSON report at json_file and sums the execution counts (field index 4)
 # across all regions of all functions; returns None if the total is zero (no coverage recorded)
-def extract_blocks_from_json(json_file: str = tmp_JSON ) -> int | None:
+def extract_blocks_from_json(json_file: str = tmp_JSON) -> int | None:
     data = json.load(open(json_file))
 
     total = 0
@@ -80,7 +84,11 @@ def extract_blocks_from_json(json_file: str = tmp_JSON ) -> int | None:
 # Runs the target program under handle_coverage.sh with input_string fed via stdin,
 # then reads the coverage count from the JSON report written by that script
 def get_instructions(input_string: str) -> tuple[int | None, int]:
-    cmd = [ "bash", "bin/handle_coverage.sh", my_program, ]
+    cmd = [
+        "bash",
+        "bin/handle_coverage.sh",
+        my_program,
+    ]
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=5, input=input_string
@@ -103,16 +111,17 @@ def get_instructions(input_string: str) -> tuple[int | None, int]:
 # (non-zero exit or timeout); returns a 3-tuple of (status, coverage_count, return_code)
 # Returns ("wrong", -1, -1) on timeout or any other exception
 def validate_prog(input_str, log_level: int = 0) -> tuple[str, int, int]:
-        instructions, ret_code = get_instructions(input_str)
-        if ret_code == 0:
-            return "complete", instructions, ret_code
-        elif ret_code > 0: # incorrect
-            return "wrong", instructions, ret_code
-        else: # signal
-            return "unexpected", None, ret_code
+    instructions, ret_code = get_instructions(input_str)
+    if ret_code == 0:
+        return "complete", instructions, ret_code
+    elif ret_code > 0:  # incorrect
+        return "wrong", instructions, ret_code
+    else:  # signal
+        return "unexpected", None, ret_code
+
 
 def get_expanded_string(expand_length: int = LENGTH_INCREASE) -> str:
-    return ''.join(random.choice(CHARSET) for _ in range(expand_length))
+    return "".join(random.choice(CHARSET) for _ in range(expand_length))
 
 
 # Prints a color-coded summary line for curr_str based on the program result rv
@@ -130,7 +139,7 @@ def log_program_result(curr_str, rv: str, n: int, c: int, suffix_count: str) -> 
         print(" " * space_len, end="\r", flush=True)  # clear the \r line
         print(
             "[%s]\t%s instr=%d, exit=%s. Input string is %s"
-            % (suffix_count,rv, n, c, toc(repr(curr_str), "yellow"))
+            % (suffix_count, rv, n, c, toc(repr(curr_str), "yellow"))
         )
     elif rv == "wrong":
         print(" " * space_len, end="\r", flush=True)  # clear the \r line
@@ -147,7 +156,7 @@ def log_program_result(curr_str, rv: str, n: int, c: int, suffix_count: str) -> 
 # accepted collects any complete (exit-0) strings found during the search
 # Returns (accepted, best_suffix, best_diff) where best_diff is the largest coverage delta seen
 def minimise_suffix(
-        prefix: str, suffix: str, log_level: int = 0, suffix_count: str = ''
+    prefix: str, suffix: str, log_level: int = 0, suffix_count: str = ""
 ) -> tuple[list[str], str, int]:
     accepted = []
     best_suffix = suffix
@@ -158,7 +167,11 @@ def minimise_suffix(
 
     if log_level:
         log_program_result(
-            prefix + suffix, expanded_rv, expanded_instructions, expanded_c, suffix_count
+            prefix + suffix,
+            expanded_rv,
+            expanded_instructions,
+            expanded_c,
+            suffix_count,
         )
 
     best_diff = abs(expanded_instructions - base_instructions)
@@ -206,6 +219,7 @@ def minimise_suffix(
 def charset_1() -> str:
     return random.choice(random.choice(CHARSET_1_CATEGORIES))
 
+
 def charset_2() -> str:
     return random.choice(random.choice(CHARSET_2_CATEGORIES))
 
@@ -238,12 +252,15 @@ def generate_suffixes():
             MY_SUFFIXES.append(suffix)
     return MY_SUFFIXES
 
+
 # Expands seed_str by trying sampled suffixes from MY_SUFFIXES, minimising each, and
 # collecting complete strings; banks suffixes that achieved the best coverage difference.
 # Returns (tried_chars, is_dead_end, extensions): the set of first-chars of sampled
 # suffixes, whether no suffix produced any coverage change, and the list of
 # seed_str+suffix strings that achieved the maximum coverage diff (to enqueue as new prefixes).
-def generate(log_level, seed_str: str = "", tried_offset: int = 0) -> tuple[set[str], bool, list[str], int]:
+def generate(
+    log_level, seed_str: str = "", tried_offset: int = 0
+) -> tuple[set[str], bool, list[str], int]:
     global suffixes
 
     print(f"seed prefix {repr(seed_str)}")
@@ -257,8 +274,11 @@ def generate(log_level, seed_str: str = "", tried_offset: int = 0) -> tuple[set[
     for i, suffix in enumerate(new_suffixes):
         tried_chars.add(suffix[0])
         accepted, best_suffix, best_diff = minimise_suffix(
-                seed_str, suffix, log_level=log_level,
-                suffix_count='%d/%d' % (tried_offset + i, tried_offset + SAMPLES_TO_TEST))
+            seed_str,
+            suffix,
+            log_level=log_level,
+            suffix_count="%d/%d" % (tried_offset + i, tried_offset + SAMPLES_TO_TEST),
+        )
 
         for val in accepted:
             if val not in res:
@@ -286,7 +306,10 @@ def write(w, s):
         myfile.write(s)
         myfile.close()
 
-def touch(w): write(w, '')
+
+def touch(w):
+    write(w, "")
+
 
 class PrefixEntry:
     def __init__(self, prefix):
@@ -294,6 +317,7 @@ class PrefixEntry:
         self.priority = len(prefix)  # shorter prefixes have higher priority
         self.remaining = set(CHARSET)
         self.tried_count = 0
+
 
 # Main driver: maintains a priority queue of prefixes seeded with single chars.
 # Always picks from the lowest-priority group at random. Priority = len(prefix),
@@ -312,6 +336,7 @@ def save_priority_queue(entries):
     with open("priority_by_prefix.json", "w") as f:
         json.dump(by_prefix, f, indent=2)
 
+
 def create_valid_strings(log_level):
     touch("valid_inputs.txt")
     entries = [PrefixEntry(c) for c in CHARSET]
@@ -320,7 +345,9 @@ def create_valid_strings(log_level):
         min_p = min(e.priority for e in entries)
         entry = random.choice([e for e in entries if e.priority == min_p])
 
-        tried_chars, is_dead_end, extensions, n_tried = generate(log_level, entry.prefix, entry.tried_count)
+        tried_chars, is_dead_end, extensions, n_tried = generate(
+            log_level, entry.prefix, entry.tried_count
+        )
         entry.tried_count += n_tried
         entry.remaining -= tried_chars
 
@@ -338,7 +365,8 @@ def create_valid_strings(log_level):
 
     print("All prefixes exhausted")
 
+
 if __name__ == "__main__":
     MY_SUFFIXES = generate_suffixes()
-    print('generated', len(MY_SUFFIXES))
+    print("generated", len(MY_SUFFIXES))
     create_valid_strings(1)
