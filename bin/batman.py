@@ -422,11 +422,11 @@ def save_priority_queue(entries):
 
 def create_valid_strings(log_level):
     touch("valid_inputs.txt")
-    entries = [PrefixEntry(c) for c in CHARSET]
+    entries = {c: PrefixEntry(c) for c in CHARSET}
 
     while entries:
-        min_p = min(e.priority for e in entries)
-        entry = random.choice([e for e in entries if e.priority == min_p])
+        min_p = min(e.priority for e in entries.values())
+        entry = random.choice([e for e in entries.values() if e.priority == min_p])
 
         tried_chars, is_dead_end, extensions, n_tried = generate(
             log_level, entry.prefix, entry.tried_count
@@ -435,16 +435,17 @@ def create_valid_strings(log_level):
         entry.remaining -= tried_chars
 
         entry.priority += 1
-        save_priority_queue(entries)
+        save_priority_queue(entries.values())
 
-        if extensions:
-            for ext in extensions:
-                entries.append(PrefixEntry(ext))
-            save_priority_queue(entries)
+        new_extensions = [ext for ext in extensions if ext not in entries]
+        if new_extensions:
+            for ext in new_extensions:
+                entries[ext] = PrefixEntry(ext)
+            save_priority_queue(entries.values())
 
         if not entry.remaining:
-            entries.remove(entry)
-            save_priority_queue(entries)
+            del entries[entry.prefix]
+            save_priority_queue(entries.values())
 
     print("All prefixes exhausted")
 
