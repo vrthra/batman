@@ -40,3 +40,6 @@ pull:
 
 push:
 	git push origin master
+
+v:
+	vim bin/batman.py
