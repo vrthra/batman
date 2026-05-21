@@ -372,10 +372,14 @@ def generate(
     max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
     extensions = []
     if max_best_diff > 0:
-        for suffix, diff in best_suffixes:
-            if diff == max_best_diff:
-                suffixes.add(suffix)
-                extensions.append(seed_str + suffix)
+        for (accepted, best_suffix, best_diff) in results:
+            if best_diff == max_best_diff:
+                suffixes.add(best_suffix)
+            if best_diff > 0:
+                extensions.append(seed_str + best_suffix)
+            for acc in accepted:
+                if len(acc) > 1:
+                    extensions.append(acc[:-1])
 
     return tried_chars, (max_best_diff == 0 and not res), extensions, len(best_suffixes)
 
