@@ -287,6 +287,9 @@ def generate(log_level, seed_str: str = "") -> list[str]:
 
         best_suffixes.append((best_suffix, best_diff))
 
+        if res:
+            break
+
     max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
 
     # no suffix caused any coverage change and no complete strings found — prefix is a dead end
