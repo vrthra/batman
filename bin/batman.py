@@ -41,6 +41,7 @@ queue = set([""] + list(CHARSET))
 used: dict[str, set[str]] = defaultdict(set)
 # suffixes is the bank of suffix strings found to cause large coverage differences
 suffixes = set([])
+MY_SUFFIXES = []
 
 
 # Wraps text in ANSI escape codes for the given color name; returns plain text if color is unknown
@@ -79,16 +80,23 @@ def extract_blocks_from_json(json_file: str = tmp_JSON ) -> int | None:
 # Run perf and extract instruction count
 # Runs the target program under handle_coverage.sh with input_string fed via stdin,
 # then reads the coverage count from the JSON report written by that script
-def get_instructions(input_string):
-    cmd = [
-        "bash",
-        "bin/handle_coverage.sh",
-        my_program,
-    ]
-    result = subprocess.run(
-        cmd, capture_output=True, text=True, timeout=5, input=input_string
-    )
-    instructions = extract_blocks_from_json()
+def get_instructions(input_string: str) -> tuple[int | None, int]:
+    cmd = [ "bash", "bin/handle_coverage.sh", my_program, ]
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=5, input=input_string
+        )
+        instructions = extract_blocks_from_json()
+        if instructions is None:
+            raise Exception(f"Could not parse instruction count for {repr(input_str)}")
+    except subprocess.TimeoutExpired:
+        if log_level:
+            print("Command timed out")
+        return None, -1
+    except Exception as e:
+        if log_level:
+            print(f"Error running command: {e}")
+        return None, -1
     return instructions, result.returncode
 
 
@@ -96,50 +104,30 @@ def get_instructions(input_string):
 # (non-zero exit or timeout); returns a 3-tuple of (status, coverage_count, return_code)
 # Returns ("wrong", -1, -1) on timeout or any other exception
 def validate_prog(input_str, log_level: int = 0) -> tuple[str, int, int]:
-    try:
         instructions, ret_code = get_instructions(input_str)
-
-        if instructions is None:
-            raise Exception(f"Could not parse instruction count for {repr(input_str)}")
-
         if ret_code == 0:
-            if log_level:
-                print(("Program returned 0 - complete"))  # , 'green'))
             return "complete", instructions, ret_code
-
-        # if log_level:
-        #     print(f"Program returned {ret_code}")
-        return "wrong", instructions, ret_code
-    except subprocess.TimeoutExpired:
-        if log_level:
-            print("Command timed out")
-        return "wrong", -1, -1
-    except Exception as e:
-        if log_level:
-            print(f"Error running command: {e}")
-        return "wrong", -1, -1
-
+        elif ret_code > 0: # incorrect
+            return "wrong", instructions, ret_code
+        else: # signal
+            return "unexpected", None, ret_code
 
 # Picks a random character from CHARSET that has not yet been tried after prefix
 # When check_used is False, the full CHARSET is considered (used during random expansion)
 # Records the chosen character in used[prefix] and returns it; returns None if all chars exhausted
 def get_next_char(
-    prefix: str, log_level: int = 0, check_used: bool = True
+    prefix_str: str, log_level: int = 0, check_used: bool = True
 ) -> str | None:
     global used
-    my_charset = [c for c in CHARSET if c not in used[prefix]]
+    my_charset = [c for c in CHARSET if c not in used[prefix_str]]
 
-    if not check_used:
-        my_charset = CHARSET
+    if not check_used: my_charset = CHARSET
 
-    if len(my_charset) == 0:
-        return None
+    if len(my_charset) == 0: return None
 
     idx = random.randrange(0, len(my_charset), 1)
     input_char = my_charset[idx]
-    used[prefix].add(input_char)
-    # if (log_level):
-    # print(input_char)
+    used[prefix_str].add(input_char)
     return input_char
 
 
@@ -147,20 +135,16 @@ def get_next_char(
 # ignoring the used-character tracking so any character may appear at any position
 # Returns as soon as get_next_char returns None (which should not happen with check_used=False)
 def get_expanded_string(
-    prefix: str, expand_length: int = LENGTH_INCREASE, log_level: int = 0
+    expand_length: int = LENGTH_INCREASE, log_level: int = 0
 ) -> str:
-    if log_level:
-        print(f"Expanding string: {prefix}")
-
-    res = prefix
+    res = []
 
     for _ in range(expand_length):
-        input_char = get_next_char(res, log_level, check_used=False)
-        if input_char is None:
-            return res
-        res += input_char
+        input_char = get_next_char("", log_level, check_used=False)
+        if input_char is None: return ''.join(res)
+        res.append(input_char)
 
-    return res
+    return ''.join(res)
 
 
 # Prints a color-coded summary line for curr_str based on the program result rv
@@ -171,19 +155,19 @@ def log_program_result(curr_str, rv: str, n: int, c: int) -> None:
     if rv == "complete":
         print(" " * space_len, end="\r", flush=True)  # clear the \r line
         print(
-            "%s n=%d, c=%s. Input string is %s"
+            "%s instr=%d, exit=%s. Input string is %s"
             % (rv, n, c, toc(repr(curr_str), "green"))
         )
     elif rv == "incomplete":
         print(" " * space_len, end="\r", flush=True)  # clear the \r line
         print(
-            "%s n=%d, c=%s. Input string is %s"
+            "%s instr=%d, exit=%s. Input string is %s"
             % (rv, n, c, toc(repr(curr_str), "yellow"))
         )
     elif rv == "wrong":
         print(" " * space_len, end="\r", flush=True)  # clear the \r line
         print(
-            "%s n=%d, c=%s. Input string is %s"  # % (rv, n, c, toc(repr(curr_str), "red"))
+            "%s instr=%d, exit=%s. Input string is %s"  # % (rv, n, c, toc(repr(curr_str), "red"))
             % (rv, n, c, toc(repr(curr_str), "red")),
             end="\r",
             flush=True,
@@ -274,13 +258,13 @@ def generate_suffixes():
                     suffix = char + random.choice(remaining_suffixes)
                 else:
                     # bank empty: use three-level structure as fallback
-                    suffix = get_expanded_string(char + charset_2())
+                    suffix = char + charset_2() + get_expanded_string()
             else:
                 # beyond the bank quota: always use the three-level structure
-                suffix = get_expanded_string(char + charset_2())
+                suffix = char + charset_2() + get_expanded_string()
             curr_suffixes.append(suffix)
-            yield suffix
-
+            MY_SUFFIXES.append(suffix)
+    return MY_SUFFIXES
 
 # Expands seed_str by trying all suffixes from generate_suffixes(), minimising each, and
 # collecting complete strings; updates queue and suffixes based on whether the prefix was
@@ -295,7 +279,7 @@ def generate(log_level, seed_str: str = "") -> list[str]:
     best_suffixes = []
     res = []
 
-    for suffix in generate_suffixes():
+    for suffix in MY_SUFFIXES:
         accepted, best_suffix, best_diff = minimise_suffix(
                 prev_str, suffix, log_level=log_level
             )
@@ -362,4 +346,6 @@ def create_valid_strings(n, log_level):
             write("valid_inputs.txt", repr(created_string) + "\n")
 
 if __name__ == "__main__":
+    MY_SUFFIXES = generate_suffixes()
+    print('generated', len(MY_SUFFIXES))
     create_valid_strings(MAX_STRINGS, 1)
