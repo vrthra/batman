@@ -12,6 +12,7 @@ LENGTH_INCREASE = 64
 
 BANK_PERCENTAGE = 0.5  # the percentage of suffixes that will be drawn from $suffixes instead of being generated randomly
 IS_PARALLEL = True
+FITNESS_FUNCTION = "max_count"  # "max_count" | "max_length"
 
 my_program = os.environ.get("PROGRAM", "./program.out")
 tmp_JSON = os.environ.get("TMP_JSON", "/tmp/tmp.json")
@@ -43,7 +44,68 @@ CHARSET_2_CATEGORIES = _CATEGORIES
 
 # suffixes is the bank of suffix strings found to cause large coverage differences
 suffixes = set([])
-MY_SUFFIXES = []
+POPULATION = None  # SuffixPopulation, initialised in __main__
+
+
+def _fitness_max_count(best_diff: int, best_suffix: str) -> float:
+    return 1.0 if best_diff > 0 else 0.0
+
+
+def _fitness_max_length(best_diff: int, best_suffix: str) -> float:
+    return float(len(best_suffix)) if best_diff > 0 else 0.0
+
+
+_FITNESS_FNS = {
+    "max_count": _fitness_max_count,
+    "max_length": _fitness_max_length,
+}
+
+
+class SuffixPopulation:
+    MUTATION_RATE = 0.05
+    ELITE_FRACTION = 0.1
+    TOURNAMENT_SIZE = 5
+
+    def __init__(self, individuals: list[str]):
+        self._pop: list[tuple[str, float]] = [(s, 0.0) for s in individuals]
+
+    def sample(self, n: int) -> list[str]:
+        return [s for s, _ in random.sample(self._pop, min(n, len(self._pop)))]
+
+    def update_fitness(self, results: list[tuple[str, int, str]]):
+        scores = {s: _FITNESS_FNS[FITNESS_FUNCTION](d, bs) for s, d, bs in results}
+        self._pop = [(s, scores.get(s, f)) for s, f in self._pop]
+
+    def evolve(self):
+        n = len(self._pop)
+        sorted_pop = sorted(self._pop, key=lambda x: x[1], reverse=True)
+        elite_n = max(1, int(n * self.ELITE_FRACTION))
+        new_pop = list(sorted_pop[:elite_n])
+        while len(new_pop) < n:
+            p1 = self._select()
+            p2 = self._select()
+            child = self._mutate(self._crossover(p1, p2))
+            new_pop.append((child, 0.0))
+        self._pop = new_pop
+
+    def _select(self) -> str:
+        candidates = random.sample(self._pop, min(self.TOURNAMENT_SIZE, len(self._pop)))
+        return max(candidates, key=lambda x: x[1])[0]
+
+    def _crossover(self, s1: str, s2: str) -> str:
+        if not s1 or not s2:
+            return s1 or s2
+        point = random.randint(0, min(len(s1), len(s2)))
+        return s1[:point] + s2[point:]
+
+    def _mutate(self, s: str) -> str:
+        return ''.join(
+            random.choice(CHARSET) if random.random() < self.MUTATION_RATE else c
+            for c in s
+        )
+
+    def __len__(self) -> int:
+        return len(self._pop)
 
 
 # Wraps text in ANSI escape codes for the given color name; returns plain text if color is unknown
@@ -232,26 +294,23 @@ def charset_2() -> str:
 #   level 1 — charset_1() (category-weighted first character)
 #   level 2 — charset_2() (category-weighted second character)
 #   level 3 — get_expanded_string (random extension from the two-char prefix)
-def generate_suffixes():
+def generate_suffixes() -> SuffixPopulation:
+    individuals = []
     for _ in range(SAMPLE_COUNT):
         char = charset_1()
-        # track suffixes chosen from the bank this round to avoid duplicates within the group
-        curr_suffixes = []
+        curr = []
         for i in range(SAMPLE_COUNT):
             if i < SAMPLE_COUNT * BANK_PERCENTAGE:
-                remaining_suffixes = [s for s in suffixes if s not in curr_suffixes]
-                if remaining_suffixes:
-                    # prepend char to a randomly chosen known-good suffix from the bank
-                    suffix = char + random.choice(remaining_suffixes)
+                remaining = [s for s in suffixes if s not in curr]
+                if remaining:
+                    suffix = char + random.choice(remaining)
                 else:
-                    # bank empty: use three-level structure as fallback
                     suffix = char + charset_2() + get_expanded_string()
             else:
-                # beyond the bank quota: always use the three-level structure
                 suffix = char + charset_2() + get_expanded_string()
-            curr_suffixes.append(suffix)
-            MY_SUFFIXES.append(suffix)
-    return MY_SUFFIXES
+            curr.append(suffix)
+            individuals.append(suffix)
+    return SuffixPopulation(individuals)
 
 
 def _init_worker():
@@ -280,12 +339,12 @@ def generate(
     res = []
     tried_chars = set()
 
-    new_suffixes = random.sample(MY_SUFFIXES, SAMPLES_TO_TEST)
+    new_suffixes = POPULATION.sample(SAMPLES_TO_TEST)
     args_list = [
-        (seed_str, suffix, log_level, "%d/%d %d/%d" % (i, SAMPLES_TO_TEST, tried_offset + i, len(MY_SUFFIXES)))
+        (seed_str, suffix, log_level, "%d/%d %d/%d" % (i, SAMPLES_TO_TEST, tried_offset + i, len(POPULATION)))
         for i, suffix in enumerate(new_suffixes)
     ]
-    tried_chars = {suffix[0] for suffix in new_suffixes}
+    tried_chars = {s[0] for s in new_suffixes}
 
     if IS_PARALLEL:
         with ProcessPoolExecutor(initializer=_init_worker) as executor:
@@ -298,12 +357,17 @@ def generate(
             if any(accepted):
                 break
 
-    for accepted, best_suffix, best_diff in results:
+    fitness_updates = []
+    for orig_suffix, (accepted, best_suffix, best_diff) in zip(new_suffixes, results):
         for val in accepted:
             if val not in res:
                 res.append(val)
                 write("valid_inputs.txt", repr(val) + "\n")
         best_suffixes.append((best_suffix, best_diff))
+        fitness_updates.append((orig_suffix, best_diff, best_suffix))
+
+    POPULATION.update_fitness(fitness_updates)
+    POPULATION.evolve()
 
     max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
     extensions = []
@@ -382,6 +446,6 @@ def create_valid_strings(log_level):
 
 
 if __name__ == "__main__":
-    MY_SUFFIXES = generate_suffixes()
-    print("generated", len(MY_SUFFIXES))
+    POPULATION = generate_suffixes()
+    print("generated", len(POPULATION))
     create_valid_strings(1)
