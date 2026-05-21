@@ -246,10 +246,33 @@ def minimise_suffix(
     return accepted, best_suffix, best_diff
 
 
-# For each character c in CHARSET, generates SAMPLE_COUNT suffixes (c² total across the charset),
-# drawing BANK_PERCENTAGE of them from the existing suffixes bank and the rest randomly via
-# get_expanded_string; each candidate suffix is then minimised and any complete strings collected
-# Updates queue and suffixes based on whether the prefix was productive, invalid, or incomplete
+# Yields c² suffix candidates: outer loop over each char in CHARSET (c iterations), inner loop
+# of SAMPLE_COUNT (c) iterations per char; for the first BANK_PERCENTAGE of each inner loop,
+# draws from the suffixes bank (prepended with char), falling back to random expansion when the
+# bank is empty; the remainder of each inner loop always uses random expansion
+def generate_suffixes():
+    for char in CHARSET:
+        # track suffixes chosen from the bank this round to avoid duplicates within the group
+        curr_suffixes = []
+        for i in range(SAMPLE_COUNT):
+            if i < SAMPLE_COUNT * BANK_PERCENTAGE:
+                remaining_suffixes = [s for s in suffixes if s not in curr_suffixes]
+                if remaining_suffixes:
+                    # prepend char to a randomly chosen known-good suffix from the bank
+                    suffix = char + random.choice(remaining_suffixes)
+                else:
+                    # bank is empty; fall back to random expansion starting from char
+                    suffix = get_expanded_string(char)
+            else:
+                # beyond the bank quota: always generate a fresh random suffix
+                suffix = get_expanded_string(char)
+            curr_suffixes.append(suffix)
+            yield suffix
+
+
+# Expands seed_str by trying all suffixes from generate_suffixes(), minimising each, and
+# collecting complete strings; updates queue and suffixes based on whether the prefix was
+# productive, a dead end, or incomplete
 def generate(log_level, seed_str: str = "") -> list[str]:
     global queue, used, suffixes
 
@@ -260,36 +283,16 @@ def generate(log_level, seed_str: str = "") -> list[str]:
     best_suffixes = []
     res = []
 
-    # outer loop: one iteration per character in CHARSET — combined with the inner loop this
-    # produces |CHARSET|^2 = SAMPLE_COUNT^2 suffix candidates in total
-    for char in CHARSET:
-        curr_suffixes = []
-
-        # inner loop: SAMPLE_COUNT iterations, yielding c^2 candidates across all outer iterations
-        for i in range(SAMPLE_COUNT):
-            # draw from the bank if we haven't exhausted it yet
-            if i < SAMPLE_COUNT * BANK_PERCENTAGE:
-                remaining_suffixes = [s for s in suffixes if s not in curr_suffixes]
-                if remaining_suffixes:
-                    # prepend char to a randomly chosen known-good suffix from the bank
-                    curr_suffixes.append(char + random.choice(remaining_suffixes))
-                else:
-                    # bank is empty; fall back to random expansion starting from char
-                    curr_suffixes.append(get_expanded_string(char))
-            else:
-                # beyond the bank quota: always generate a fresh random suffix
-                curr_suffixes.append(get_expanded_string(char))
-
-        for suffix in curr_suffixes:
-            accepted, best_suffix, best_diff = minimise_suffix(
+    for suffix in generate_suffixes():
+        accepted, best_suffix, best_diff = minimise_suffix(
                 prev_str, suffix, log_level=log_level
             )
 
-            for val in accepted:
-                if val not in res:
-                    res.append(val)
+        for val in accepted:
+            if val not in res:
+                res.append(val)
 
-            best_suffixes.append((best_suffix, best_diff))
+        best_suffixes.append((best_suffix, best_diff))
 
     max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
 
