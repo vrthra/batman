@@ -34,3 +34,6 @@ run.calc_parse: calc_parse.out
 
 get:
 	wget https://raw.githubusercontent.com/vrthra/mimid/refs/heads/master/Cmimid/examples/vector.h
+
+pull:
+	git pull --rebase origin master --autostash
