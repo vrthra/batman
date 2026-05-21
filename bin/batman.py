@@ -17,24 +17,26 @@ CHARSET = list(string.printable)
 SAMPLE_COUNT = len(CHARSET)
 SAMPLES_TO_TEST = 100
 
-# Second-level charset categories; each category has equal selection probability,
+_BRACKETS_OPEN  = list('({[<')
+_BRACKETS_CLOSE = list(')}]>')
+_QUOTES         = list('"\'`')
+_OTHER_PUNCT    = list(set(string.punctuation) - set('({[<)}]>') - set('"\'`'))
+
+# Charset categories; each category has equal selection probability,
 # and within a category every character has equal probability — this prevents the
 # large letter/digit groups from drowning out the smaller punctuation groups
-CHARSET_1_CATEGORIES = [
+_CATEGORIES = [
     list(string.digits),
     list(string.ascii_letters),
-    list('<>(){}[]'),        # paired / bracketing characters
-    list('"\'`'),            # quote characters
-    list(string.whitespace), # space, tab, newline, etc.
+    _BRACKETS_OPEN,
+    _BRACKETS_CLOSE,
+    _QUOTES,
+    list(string.whitespace),
+    _OTHER_PUNCT,
 ]
 
-CHARSET_2_CATEGORIES = [
-    list(string.digits),
-    list(string.ascii_letters),
-    list('<>(){}[]'),        # paired / bracketing characters
-    list('"\'`'),            # quote characters
-    list(string.whitespace), # space, tab, newline, etc.
-]
+CHARSET_1_CATEGORIES = _CATEGORIES
+CHARSET_2_CATEGORIES = _CATEGORIES
 
 # suffixes is the bank of suffix strings found to cause large coverage differences
 suffixes = set([])
@@ -237,20 +239,26 @@ def generate_suffixes():
     return MY_SUFFIXES
 
 # Expands seed_str by trying sampled suffixes from MY_SUFFIXES, minimising each, and
-# collecting complete strings; banks suffixes that achieved the best coverage difference
-def generate(log_level, seed_str: str = "") -> list[str]:
+# collecting complete strings; banks suffixes that achieved the best coverage difference.
+# Returns (tried_chars, is_dead_end, extensions): the set of first-chars of sampled
+# suffixes, whether no suffix produced any coverage change, and the list of
+# seed_str+suffix strings that achieved the maximum coverage diff (to enqueue as new prefixes).
+def generate(log_level, seed_str: str = "", tried_offset: int = 0) -> tuple[set[str], bool, list[str], int]:
     global suffixes
 
     print(f"seed prefix {repr(seed_str)}")
 
     best_suffixes = []
     res = []
+    tried_chars = set()
 
     new_suffixes = random.sample(MY_SUFFIXES, SAMPLES_TO_TEST)
 
     for i, suffix in enumerate(new_suffixes):
+        tried_chars.add(suffix[0])
         accepted, best_suffix, best_diff = minimise_suffix(
-                seed_str, suffix, log_level=log_level, suffix_count='%d/%d' %(i, SAMPLES_TO_TEST))
+                seed_str, suffix, log_level=log_level,
+                suffix_count='%d/%d' % (tried_offset + i, tried_offset + SAMPLES_TO_TEST))
 
         for val in accepted:
             if val not in res:
@@ -263,12 +271,14 @@ def generate(log_level, seed_str: str = "") -> list[str]:
             break
 
     max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
+    extensions = []
     if max_best_diff > 0:
         for suffix, diff in best_suffixes:
             if diff == max_best_diff:
                 suffixes.add(suffix)
+                extensions.append(seed_str + suffix)
 
-    return res
+    return tried_chars, (max_best_diff == 0 and not res), extensions, len(best_suffixes)
 
 
 def write(w, s):
@@ -278,14 +288,55 @@ def write(w, s):
 
 def touch(w): write(w, '')
 
-SEEDS = [""] + list(CHARSET)
+class PrefixEntry:
+    def __init__(self, prefix):
+        self.prefix = prefix
+        self.priority = len(prefix)  # shorter prefixes have higher priority
+        self.remaining = set(CHARSET)
+        self.tried_count = 0
 
-# Main driver: repeatedly picks a random seed and expands it via generate()
+# Main driver: maintains a priority queue of prefixes seeded with single chars.
+# Always picks from the lowest-priority group at random. Priority = len(prefix),
+# so shorter prefixes are always preferred over longer ones. Dead ends increment
+# priority by 1 to defer the entry behind peers of the same length. Productive
+# continuations are enqueued as new, longer entries. An entry is discarded once
+# all possible first-char extensions have been tried.
+def save_priority_queue(entries):
+    by_priority = {}
+    by_prefix = {}
+    for e in entries:
+        by_priority.setdefault(e.priority, []).append(e.prefix)
+        by_prefix[e.prefix] = e.priority
+    with open("priority_by_priority.json", "w") as f:
+        json.dump({str(k): v for k, v in sorted(by_priority.items())}, f, indent=2)
+    with open("priority_by_prefix.json", "w") as f:
+        json.dump(by_prefix, f, indent=2)
+
 def create_valid_strings(log_level):
     touch("valid_inputs.txt")
+    entries = [PrefixEntry(c) for c in CHARSET]
 
-    while True:
-        generate(log_level, random.choice(SEEDS))
+    while entries:
+        min_p = min(e.priority for e in entries)
+        entry = random.choice([e for e in entries if e.priority == min_p])
+
+        tried_chars, is_dead_end, extensions, n_tried = generate(log_level, entry.prefix, entry.tried_count)
+        entry.tried_count += n_tried
+        entry.remaining -= tried_chars
+
+        entry.priority += 1
+        save_priority_queue(entries)
+
+        if extensions:
+            for ext in extensions:
+                entries.append(PrefixEntry(ext))
+            save_priority_queue(entries)
+
+        if not entry.remaining:
+            entries.remove(entry)
+            save_priority_queue(entries)
+
+    print("All prefixes exhausted")
 
 if __name__ == "__main__":
     MY_SUFFIXES = generate_suffixes()
