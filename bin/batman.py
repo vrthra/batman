@@ -83,7 +83,7 @@ def extract_blocks_from_json(json_file: str = tmp_JSON) -> int | None:
 # Run perf and extract instruction count
 # Runs the target program under handle_coverage.sh with input_string fed via stdin,
 # then reads the coverage count from the JSON report written by that script
-def get_instructions(input_string: str) -> tuple[int | None, int]:
+def get_instructions(input_string: str, log_level: int = 0) -> tuple[int | None, int]:
     cmd = [
         "bash",
         "bin/handle_coverage.sh",
@@ -95,7 +95,9 @@ def get_instructions(input_string: str) -> tuple[int | None, int]:
         )
         instructions = extract_blocks_from_json()
         if instructions is None:
-            raise Exception(f"Could not parse instruction count for {repr(input_str)}")
+            raise Exception(
+                f"Could not parse instruction count for {repr(input_string)}"
+            )
     except subprocess.TimeoutExpired:
         if log_level:
             print("Command timed out")
@@ -113,11 +115,11 @@ def get_instructions(input_string: str) -> tuple[int | None, int]:
 def validate_prog(input_str, log_level: int = 0) -> tuple[str, int, int]:
     instructions, ret_code = get_instructions(input_str)
     if ret_code == 0:
-        return "complete", instructions, ret_code
+        return "complete", instructions if instructions else -1, ret_code
     elif ret_code > 0:  # incorrect
-        return "wrong", instructions, ret_code
+        return "wrong", instructions if instructions else -1, ret_code
     else:  # signal
-        return "unexpected", None, ret_code
+        return "unexpected", -1, ret_code
 
 
 def get_expanded_string(expand_length: int = LENGTH_INCREASE) -> str:
@@ -135,7 +137,7 @@ def log_program_result(curr_str, rv: str, n: int, c: int, suffix_count: str) -> 
             "[%s]\t%s instr=%d, exit=%s. Input string is %s"
             % (suffix_count, rv, n, c, toc(repr(curr_str), "green"))
         )
-    elif rv == "incomplete":
+    elif rv == "unexpected":
         print(" " * space_len, end="\r", flush=True)  # clear the \r line
         print(
             "[%s]\t%s instr=%d, exit=%s. Input string is %s"

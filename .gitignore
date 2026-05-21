@@ -12,3 +12,5 @@ compile_commands.json
 scratch/**
 notes/**
 invalid_prefixes.txt
+priority_by_prefix.json
+priority_by_priority.json
