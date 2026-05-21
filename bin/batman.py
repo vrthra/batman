@@ -99,7 +99,7 @@ class SuffixPopulation:
         return s1[:point] + s2[point:]
 
     def _mutate(self, s: str) -> str:
-        return ''.join(
+        return "".join(
             random.choice(CHARSET) if random.random() < self.MUTATION_RATE else c
             for c in s
         )
@@ -130,7 +130,7 @@ def toc(text, color):
 
 # Parses the llvm-cov JSON report at json_file and sums the execution counts (field index 4)
 # across all regions of all functions; returns None if the total is zero (no coverage recorded)
-def extract_blocks_from_json(json_file: str = None) -> int | None:
+def extract_blocks_from_json(json_file: str | None = None) -> int | None:
     data = json.load(open(json_file or tmp_JSON))
 
     total = 0
@@ -318,9 +318,13 @@ def _init_worker():
     tmp_JSON = f"/tmp/batman_{os.getpid()}.json"
     os.environ["TMP_JSON"] = tmp_JSON
 
+
 def _minimise_suffix_worker(args):
     prefix, suffix, log_level, suffix_count = args
-    return minimise_suffix(prefix, suffix, log_level=log_level, suffix_count=suffix_count)
+    return minimise_suffix(
+        prefix, suffix, log_level=log_level, suffix_count=suffix_count
+    )
+
 
 # Expands seed_str by trying sampled suffixes from MY_SUFFIXES, minimising each, and
 # collecting complete strings; banks suffixes that achieved the best coverage difference.
@@ -332,6 +336,9 @@ def generate(
 ) -> tuple[set[str], bool, list[str], int]:
     global suffixes
 
+    if POPULATION is None:
+        return set(), False, [], 0
+
     print(" " * 80, end="\r", flush=True)  # clear the \r line
     print(f"seed prefix {repr(seed_str)}")
 
@@ -341,7 +348,12 @@ def generate(
 
     new_suffixes = POPULATION.sample(SAMPLES_TO_TEST)
     args_list = [
-        (seed_str, suffix, log_level, "%d/%d %d/%d" % (i, SAMPLES_TO_TEST, tried_offset + i, len(POPULATION)))
+        (
+            seed_str,
+            suffix,
+            log_level,
+            "%d/%d %d/%d" % (i, SAMPLES_TO_TEST, tried_offset + i, len(POPULATION)),
+        )
         for i, suffix in enumerate(new_suffixes)
     ]
     tried_chars = {s[0] for s in new_suffixes}
@@ -372,7 +384,7 @@ def generate(
     max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
     extensions = []
     if max_best_diff > 0:
-        for (accepted, best_suffix, best_diff) in results:
+        for accepted, best_suffix, best_diff in results:
             if best_diff == max_best_diff:
                 suffixes.add(best_suffix)
             if best_diff > 0:
