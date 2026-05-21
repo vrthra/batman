@@ -2,7 +2,6 @@
 # coding: utf-8
 
 import json, os, random, string, subprocess
-from collections import defaultdict
 
 MAX_STRINGS = 10000
 COUNT = 1
@@ -16,6 +15,7 @@ tmp_JSON = os.environ.get('TMP_JSON', "/tmp/tmp.json")
 
 CHARSET = list(string.printable)
 SAMPLE_COUNT = len(CHARSET)
+SAMPLES_TO_TEST = 100
 
 # Second-level charset categories; each category has equal selection probability,
 # and within a category every character has equal probability — this prevents the
@@ -36,10 +36,6 @@ CHARSET_2_CATEGORIES = [
     list(string.whitespace), # space, tab, newline, etc.
 ]
 
-# queue holds prefixes to explore; initialised with the empty string and all single characters
-queue = set([""] + list(CHARSET))
-# used tracks which characters have already been tried after each prefix, to avoid redundant runs
-used: dict[str, set[str]] = defaultdict(set)
 # suffixes is the bank of suffix strings found to cause large coverage differences
 suffixes = set([])
 MY_SUFFIXES = []
@@ -113,39 +109,8 @@ def validate_prog(input_str, log_level: int = 0) -> tuple[str, int, int]:
         else: # signal
             return "unexpected", None, ret_code
 
-# Picks a random character from CHARSET that has not yet been tried after prefix
-# When check_used is False, the full CHARSET is considered (used during random expansion)
-# Records the chosen character in used[prefix] and returns it; returns None if all chars exhausted
-def get_next_char(
-    prefix_str: str, log_level: int = 0, check_used: bool = True
-) -> str | None:
-    global used
-    my_charset = [c for c in CHARSET if c not in used[prefix_str]]
-
-    if not check_used: my_charset = CHARSET
-
-    if len(my_charset) == 0: return None
-
-    idx = random.randrange(0, len(my_charset), 1)
-    input_char = my_charset[idx]
-    used[prefix_str].add(input_char)
-    return input_char
-
-
-# Grows prefix by appending up to expand_length randomly chosen characters from CHARSET,
-# ignoring the used-character tracking so any character may appear at any position
-# Returns as soon as get_next_char returns None (which should not happen with check_used=False)
-def get_expanded_string(
-    expand_length: int = LENGTH_INCREASE, log_level: int = 0
-) -> str:
-    res = []
-
-    for _ in range(expand_length):
-        input_char = get_next_char("", log_level, check_used=False)
-        if input_char is None: return ''.join(res)
-        res.append(input_char)
-
-    return ''.join(res)
+def get_expanded_string(expand_length: int = LENGTH_INCREASE) -> str:
+    return ''.join(random.choice(CHARSET) for _ in range(expand_length))
 
 
 # Prints a color-coded summary line for curr_str based on the program result rv
@@ -271,26 +236,21 @@ def generate_suffixes():
             MY_SUFFIXES.append(suffix)
     return MY_SUFFIXES
 
-# Expands seed_str by trying all suffixes from generate_suffixes(), minimising each, and
-# collecting complete strings; updates queue and suffixes based on whether the prefix was
-# productive, a dead end, or incomplete
+# Expands seed_str by trying sampled suffixes from MY_SUFFIXES, minimising each, and
+# collecting complete strings; banks suffixes that achieved the best coverage difference
 def generate(log_level, seed_str: str = "") -> list[str]:
-    global queue, used, suffixes
+    global suffixes
 
-    print(f"prefix {repr(seed_str)}")
-
-    prev_str = seed_str
+    print(f"seed prefix {repr(seed_str)}")
 
     best_suffixes = []
     res = []
 
-    new_suffixes = list(MY_SUFFIXES)
-    l = len(MY_SUFFIXES)
-    random.shuffle(new_suffixes)
+    new_suffixes = random.sample(MY_SUFFIXES, SAMPLES_TO_TEST)
 
-    for i,suffix in enumerate(new_suffixes):
+    for i, suffix in enumerate(new_suffixes):
         accepted, best_suffix, best_diff = minimise_suffix(
-                prev_str, suffix, log_level=log_level, suffix_count='%d/%d' %(i, l))
+                seed_str, suffix, log_level=log_level, suffix_count='%d/%d' %(i, SAMPLES_TO_TEST))
 
         for val in accepted:
             if val not in res:
@@ -303,34 +263,10 @@ def generate(log_level, seed_str: str = "") -> list[str]:
             break
 
     max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
-
-    # no suffix caused any coverage change and no complete strings found — prefix is a dead end
-    if max_best_diff == 0 and len(res) == 0:
-        print()
-        print("Invalid prefix: %s" % toc(repr(seed_str), "red"))
-
-        # remove the dead-end prefix and all strings that extend it from the queue
-        to_remove = set()
-
-        for val in queue:
-            if val.startswith(seed_str):
-                to_remove.add(val)
-
-        queue.difference_update(to_remove)
-    elif max_best_diff > 0:
-        print()
-        print("Incomplete: %s" % toc(repr(seed_str), "yellow"))
-
-        # enqueue every prefix+suffix candidate for further exploration
+    if max_best_diff > 0:
         for suffix, diff in best_suffixes:
-            queue.add(seed_str + suffix)
-
-            # bank the suffix if it achieved the maximum observed coverage difference
             if diff == max_best_diff:
                 suffixes.add(suffix)
-
-        for val in res:
-            queue.add(val)
 
     return res
 
@@ -342,20 +278,16 @@ def write(w, s):
 
 def touch(w): write(w, '')
 
-# Main driver: repeatedly picks a random prefix from the queue, expands it via generate(),
-# and appends any newly found complete strings to valid_inputs.txt; stops when the queue empties
-def create_valid_strings(n, log_level):
+SEEDS = [""] + list(CHARSET)
+
+# Main driver: repeatedly picks a random seed and expands it via generate()
+def create_valid_strings(log_level):
     touch("valid_inputs.txt")
 
     while True:
-        if len(queue) == 0:
-            print("Queue empty, returning")
-            return
-
-        prev_str = random.choice(list(queue))
-        generate(log_level, prev_str)
+        generate(log_level, random.choice(SEEDS))
 
 if __name__ == "__main__":
     MY_SUFFIXES = generate_suffixes()
     print('generated', len(MY_SUFFIXES))
-    create_valid_strings(MAX_STRINGS, 1)
+    create_valid_strings(1)
