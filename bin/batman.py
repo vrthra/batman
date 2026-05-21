@@ -25,18 +25,11 @@ tmp_JSON = os.environ.get('TMP_JSON', "/tmp/tmp.json")
 #     string.printable
 # )  # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
 CHARSET = [
-    "[",
-    "]",
-    "{",
-    "}",
-    "1",
-    "0",
-    "a",
-    "b",
-    ":",
-    '"',
-    ",",
-    ".",
+    "[", "]",
+    "{", "}",
+    "1", "0",
+    "a", "b",
+    ":", '"', ",", ".",
 ]
 SAMPLE_COUNT = len(CHARSET)
 
@@ -202,7 +195,6 @@ def log_program_result(curr_str, rv: str, n: int, c: int) -> None:
 def minimise_suffix(
     prefix: str, suffix: str, log_level: int = 0
 ) -> tuple[list[str], str, int]:
-    """ """
     accepted = []
     best_suffix = suffix
 
@@ -259,9 +251,6 @@ def minimise_suffix(
 # get_expanded_string; each candidate suffix is then minimised and any complete strings collected
 # Updates queue and suffixes based on whether the prefix was productive, invalid, or incomplete
 def generate(log_level, seed_str: str = "") -> list[str]:
-    """
-    Feed the seed string with a long addition.
-    """
     global queue, used, suffixes
 
     print(f"prefix {repr(seed_str)}")
@@ -335,13 +324,17 @@ def generate(log_level, seed_str: str = "") -> list[str]:
     return res
 
 
+def write(w, s):
+    with open(w, "a") as myfile:
+        myfile.write(s)
+        myfile.close()
+
+def touch(w): write(w, '')
+
 # Main driver: repeatedly picks a random prefix from the queue, expands it via generate(),
 # and appends any newly found complete strings to valid_inputs.txt; stops when the queue empties
 def create_valid_strings(n, log_level):
-
-    with open("valid_inputs.txt", "w") as myfile:
-        myfile.write("")
-        myfile.close()
+    touch("valid_inputs.txt")
 
     while True:
         if len(queue) == 0:
@@ -351,10 +344,7 @@ def create_valid_strings(n, log_level):
         prev_str = random.choice(list(queue))
         created_strings = generate(log_level, prev_str)
         for created_string in created_strings:
-            with open("valid_inputs.txt", "a") as myfile:
-                myfile.write(repr(created_string) + "\n")
-                myfile.close()
-
+            write("valid_inputs.txt", repr(created_string) + "\n")
 
 if __name__ == "__main__":
     create_valid_strings(MAX_STRINGS, 1)
