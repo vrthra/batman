@@ -20,6 +20,14 @@ SAMPLE_COUNT = len(CHARSET)
 # Second-level charset categories; each category has equal selection probability,
 # and within a category every character has equal probability — this prevents the
 # large letter/digit groups from drowning out the smaller punctuation groups
+CHARSET_1_CATEGORIES = [
+    list(string.digits),
+    list(string.ascii_letters),
+    list('<>(){}[]'),        # paired / bracketing characters
+    list('"\'`'),            # quote characters
+    list(string.whitespace), # space, tab, newline, etc.
+]
+
 CHARSET_2_CATEGORIES = [
     list(string.digits),
     list(string.ascii_letters),
@@ -228,6 +236,9 @@ def minimise_suffix(
 # Picks a character for the second level of suffix generation: first selects one of the five
 # categories uniformly at random, then picks uniformly within that category; this gives equal
 # weight to each category regardless of how many characters it contains
+def charset_1() -> str:
+    return random.choice(random.choice(CHARSET_1_CATEGORIES))
+
 def charset_2() -> str:
     return random.choice(random.choice(CHARSET_2_CATEGORIES))
 
@@ -236,11 +247,12 @@ def charset_2() -> str:
 # of SAMPLE_COUNT (c) iterations per char; for the first BANK_PERCENTAGE of each inner loop,
 # draws from the suffixes bank (prepended with char), falling back to the three-level structure
 # when the bank is empty; the remainder of each inner loop always uses the three-level structure:
-#   level 1 — char (from CHARSET, the outer loop variable)
+#   level 1 — charset_1() (category-weighted first character)
 #   level 2 — charset_2() (category-weighted second character)
 #   level 3 — get_expanded_string (random extension from the two-char prefix)
 def generate_suffixes():
-    for char in CHARSET:
+    for _ in range(SAMPLE_COUNT):
+        char = charset_1()
         # track suffixes chosen from the bank this round to avoid duplicates within the group
         curr_suffixes = []
         for i in range(SAMPLE_COUNT):
