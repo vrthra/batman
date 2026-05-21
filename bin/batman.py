@@ -6,13 +6,12 @@ import os
 import random
 import string
 import subprocess
+from concurrent.futures import ProcessPoolExecutor
 
-MAX_STRINGS = 10000
-COUNT = 1
-MIN_INCREASE = 10
 LENGTH_INCREASE = 64
 
 BANK_PERCENTAGE = 0.5  # the percentage of suffixes that will be drawn from $suffixes instead of being generated randomly
+IS_PARALLEL = True
 
 my_program = os.environ.get("PROGRAM", "./program.out")
 tmp_JSON = os.environ.get("TMP_JSON", "/tmp/tmp.json")
@@ -36,7 +35,7 @@ _CATEGORIES = [
     _BRACKETS_CLOSE,
     _QUOTES,
     list(string.whitespace),
-    _OTHER_PUNCT,
+    *_OTHER_PUNCT,
 ]
 
 CHARSET_1_CATEGORIES = _CATEGORIES
@@ -69,8 +68,8 @@ def toc(text, color):
 
 # Parses the llvm-cov JSON report at json_file and sums the execution counts (field index 4)
 # across all regions of all functions; returns None if the total is zero (no coverage recorded)
-def extract_blocks_from_json(json_file: str = tmp_JSON) -> int | None:
-    data = json.load(open(json_file))
+def extract_blocks_from_json(json_file: str = None) -> int | None:
+    data = json.load(open(json_file or tmp_JSON))
 
     total = 0
     for f in data["data"][0]["functions"]:
@@ -255,6 +254,15 @@ def generate_suffixes():
     return MY_SUFFIXES
 
 
+def _init_worker():
+    global tmp_JSON
+    tmp_JSON = f"/tmp/batman_{os.getpid()}.json"
+    os.environ["TMP_JSON"] = tmp_JSON
+
+def _minimise_suffix_worker(args):
+    prefix, suffix, log_level, suffix_count = args
+    return minimise_suffix(prefix, suffix, log_level=log_level, suffix_count=suffix_count)
+
 # Expands seed_str by trying sampled suffixes from MY_SUFFIXES, minimising each, and
 # collecting complete strings; banks suffixes that achieved the best coverage difference.
 # Returns (tried_chars, is_dead_end, extensions): the set of first-chars of sampled
@@ -265,6 +273,7 @@ def generate(
 ) -> tuple[set[str], bool, list[str], int]:
     global suffixes
 
+    print(" " * 80, end="\r", flush=True)  # clear the \r line
     print(f"seed prefix {repr(seed_str)}")
 
     best_suffixes = []
@@ -272,25 +281,29 @@ def generate(
     tried_chars = set()
 
     new_suffixes = random.sample(MY_SUFFIXES, SAMPLES_TO_TEST)
+    args_list = [
+        (seed_str, suffix, log_level, "%d/%d %d/%d" % (i, SAMPLES_TO_TEST, tried_offset + i, len(MY_SUFFIXES)))
+        for i, suffix in enumerate(new_suffixes)
+    ]
+    tried_chars = {suffix[0] for suffix in new_suffixes}
 
-    for i, suffix in enumerate(new_suffixes):
-        tried_chars.add(suffix[0])
-        accepted, best_suffix, best_diff = minimise_suffix(
-            seed_str,
-            suffix,
-            log_level=log_level,
-            suffix_count="%d/%d %d/%d" % (i, SAMPLES_TO_TEST, tried_offset + i, len(MY_SUFFIXES)),
-        )
+    if IS_PARALLEL:
+        with ProcessPoolExecutor(initializer=_init_worker) as executor:
+            results = list(executor.map(_minimise_suffix_worker, args_list))
+    else:
+        results = []
+        for args in args_list:
+            accepted, best_suffix, best_diff = _minimise_suffix_worker(args)
+            results.append((accepted, best_suffix, best_diff))
+            if any(accepted):
+                break
 
+    for accepted, best_suffix, best_diff in results:
         for val in accepted:
             if val not in res:
                 res.append(val)
                 write("valid_inputs.txt", repr(val) + "\n")
-
         best_suffixes.append((best_suffix, best_diff))
-
-        if res:
-            break
 
     max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
     extensions = []
