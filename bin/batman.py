@@ -283,6 +283,7 @@ def generate(log_level, seed_str: str = "") -> list[str]:
         for val in accepted:
             if val not in res:
                 res.append(val)
+                write("valid_inputs.txt", repr(val) + "\n")
 
         best_suffixes.append((best_suffix, best_diff))
 
@@ -337,9 +338,7 @@ def create_valid_strings(n, log_level):
             return
 
         prev_str = random.choice(list(queue))
-        created_strings = generate(log_level, prev_str)
-        for created_string in created_strings:
-            write("valid_inputs.txt", repr(created_string) + "\n")
+        generate(log_level, prev_str)
 
 if __name__ == "__main__":
     MY_SUFFIXES = generate_suffixes()
