@@ -5,7 +5,7 @@ import json
 import os
 import random
 
-# import string
+import string
 import subprocess
 from collections import defaultdict
 
@@ -21,17 +21,19 @@ BANK_PERCENTAGE = 0.5  # the percentage of suffixes that will be drawn from $suf
 my_program = os.environ.get("PROGRAM", "./program.out")
 tmp_JSON = os.environ.get('TMP_JSON', "/tmp/tmp.json")
 
-# CHARSET = (
-#     string.printable
-# )  # ['[',']','{','}','(',')','<','>','1','0','a','b',':','"',',','.', '\'']
-CHARSET = [
-    "[", "]",
-    "{", "}",
-    "1", "0",
-    "a", "b",
-    ":", '"', ",", ".",
-]
+CHARSET = list(string.printable)
 SAMPLE_COUNT = len(CHARSET)
+
+# Second-level charset categories; each category has equal selection probability,
+# and within a category every character has equal probability — this prevents the
+# large letter/digit groups from drowning out the smaller punctuation groups
+CHARSET_2_CATEGORIES = [
+    list(string.digits),
+    list(string.ascii_letters),
+    list('<>(){}[]'),        # paired / bracketing characters
+    list('"\'`'),            # quote characters
+    list(string.whitespace), # space, tab, newline, etc.
+]
 
 # queue holds prefixes to explore; initialised with the empty string and all single characters
 queue = set([""] + list(CHARSET))
@@ -246,10 +248,20 @@ def minimise_suffix(
     return accepted, best_suffix, best_diff
 
 
+# Picks a character for the second level of suffix generation: first selects one of the five
+# categories uniformly at random, then picks uniformly within that category; this gives equal
+# weight to each category regardless of how many characters it contains
+def charset_2() -> str:
+    return random.choice(random.choice(CHARSET_2_CATEGORIES))
+
+
 # Yields c² suffix candidates: outer loop over each char in CHARSET (c iterations), inner loop
 # of SAMPLE_COUNT (c) iterations per char; for the first BANK_PERCENTAGE of each inner loop,
-# draws from the suffixes bank (prepended with char), falling back to random expansion when the
-# bank is empty; the remainder of each inner loop always uses random expansion
+# draws from the suffixes bank (prepended with char), falling back to the three-level structure
+# when the bank is empty; the remainder of each inner loop always uses the three-level structure:
+#   level 1 — char (from CHARSET, the outer loop variable)
+#   level 2 — charset_2() (category-weighted second character)
+#   level 3 — get_expanded_string (random extension from the two-char prefix)
 def generate_suffixes():
     for char in CHARSET:
         # track suffixes chosen from the bank this round to avoid duplicates within the group
@@ -261,11 +273,11 @@ def generate_suffixes():
                     # prepend char to a randomly chosen known-good suffix from the bank
                     suffix = char + random.choice(remaining_suffixes)
                 else:
-                    # bank is empty; fall back to random expansion starting from char
-                    suffix = get_expanded_string(char)
+                    # bank empty: use three-level structure as fallback
+                    suffix = get_expanded_string(char + charset_2())
             else:
-                # beyond the bank quota: always generate a fresh random suffix
-                suffix = get_expanded_string(char)
+                # beyond the bank quota: always use the three-level structure
+                suffix = get_expanded_string(char + charset_2())
             curr_suffixes.append(suffix)
             yield suffix
 
