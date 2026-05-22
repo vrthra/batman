@@ -176,9 +176,9 @@ def get_instructions(input_string: str, log_level: int = 0) -> tuple[int | None,
 def validate_prog(input_str, log_level: int = 0) -> tuple[str, int, int]:
     instructions, ret_code = get_instructions(input_str)
     if ret_code == 0:
-        return "complete", instructions if instructions else -1, ret_code
+        return "complete", instructions or -1, ret_code
     elif ret_code > 0:  # incorrect
-        return "wrong", instructions if instructions else -1, ret_code
+        return "wrong", instructions or -1, ret_code
     else:  # signal
         return "unexpected", -1, ret_code
 
