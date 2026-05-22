@@ -16,6 +16,7 @@ FITNESS_FUNCTION = "max_count"  # "max_count" | "max_length"
 
 MY_PROGRAM = os.environ.get("PROGRAM", "./program.out")
 tmp_JSON = os.environ.get("TMP_JSON", "/tmp/tmp.json")
+PREFIX = os.environ.get("PREFIX", "")
 
 CHARSET = list(string.printable)
 SAMPLE_COUNT = len(CHARSET)
@@ -194,20 +195,17 @@ def get_expanded_string(expand_length: int = LENGTH_INCREASE) -> str:
 # "complete" is green (newline), "incomplete" is yellow (newline), "wrong" is red (overwritten via \r)
 def log_program_result(curr_str, rv: str, n: int, c: int, suffix_count: str) -> None:
     if rv == "complete":
-        print(" " * 80, end="\r", flush=True)  # clear the \r line
-        print(
+        overprint(
             "[%s]\t%s instr=%d, exit=%s. Input string is %s"
             % (suffix_count, rv, n, c, toc(repr(curr_str), "green"))
         )
     elif rv == "unexpected":
-        print(" " * 80, end="\r", flush=True)  # clear the \r line
-        print(
+        overprint(
             "[%s]\t%s instr=%d, exit=%s. Input string is %s"
             % (suffix_count, rv, n, c, toc(repr(curr_str), "yellow"))
         )
     elif rv == "wrong":
-        print(" " * 80, end="\r", flush=True)  # clear the \r line
-        print(
+        overprint(
             "[%s]\t%s instr=%d, exit=%s. Input string is %s"
             % (suffix_count, rv, n, c, toc(repr(curr_str), "red")),
             end="\r",
@@ -326,6 +324,13 @@ def _minimise_suffix_worker(args):
         prefix, suffix, log_level=log_level, suffix_count=suffix_count
     )
 
+def clearline():
+    print(" " * 80, end="\r", flush=True)  # clear the \r line
+
+def overprint(s: str, end='\n', flush=False):
+    clearline()
+    print(s, end=end, flush=flush)
+
 
 # Expands seed_str by trying sampled suffixes from MY_SUFFIXES, minimising each, and
 # collecting complete strings; banks suffixes that achieved the best coverage difference.
@@ -340,8 +345,7 @@ def generate(
     if POPULATION is None:
         return set(), False, [], 0
 
-    print(" " * 80, end="\r", flush=True)  # clear the \r line
-    print(f"seed prefix {repr(seed_str)}")
+    overprint(f"seed prefix {repr(seed_str)}")
 
     best_suffixes = []
     res = []
@@ -443,14 +447,16 @@ def create_valid_strings(log_level):
     touch("valid_inputs.txt")
     touch("selected_prefix.txt")
 
-    entries = {c: PrefixEntry(c) for c in CHARSET}
+    if PREFIX:
+        entries = {c: PrefixEntry(c) for c in PREFIX}
+    else:
+        entries = {c: PrefixEntry(c) for c in CHARSET}
 
     while entries:
         min_p = min(e.priority for e in entries.values())
         entry = random.choice([e for e in entries.values() if e.priority == min_p])
 
-        with open("selected_prefix.txt", "a") as f:
-            f.write(repr(entry.prefix) + "\n")
+        write("selected_prefix.txt", repr(entry.prefix) + "\n")
 
         tried_chars, is_dead_end, extensions, n_tried = generate(
             log_level, entry.prefix, entry.tried_count
