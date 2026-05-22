@@ -14,8 +14,8 @@ BANK_PERCENTAGE = 0.5  # the percentage of suffixes that will be drawn from $suf
 IS_PARALLEL = True
 FITNESS_FUNCTION = "max_count"  # "max_count" | "max_length"
 
-MY_PROGRAM = os.environ.get("PROGRAM", "./program.out")
-tmp_JSON = os.environ.get("TMP_JSON", "/tmp/tmp.json")
+MY_PROGRAM = os.environ.get("PROGRAM", "./program.out").strip()
+tmp_JSON = os.environ.get("TMP_JSON", "/tmp/tmp.json").strip()
 PREFIX = os.environ.get("PREFIX", "")
 
 CHARSET = list(string.printable)

@@ -26,13 +26,14 @@ pxctl: pxctl.out
 run.%: %.out
 	env PROGRAM=./$^ python3 $(DBG) $(EXPLORER)
 
-
-
+run.cJSON: export PROGRAM=cJSON.out 
+run.cJSON: export PREFIX={
 run.cJSON: cJSON.out
-	env PROGRAM=./cJSON.out python3 $(DBG) $(EXPLORER)
+	python3 $(DBG) $(EXPLORER)
 
+run.calc_parse: export PROGRAM=calc_parse.out 
 run.calc_parse: calc_parse.out
-	env PROGRAM=./calc_parse.out python3 $(DBG) $(EXPLORER)
+	python3 $(DBG) $(EXPLORER)
 
 get:
 	wget https://raw.githubusercontent.com/vrthra/mimid/refs/heads/master/Cmimid/examples/vector.h
