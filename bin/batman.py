@@ -223,9 +223,11 @@ def minimise_suffix(
     accepted = []
     best_suffix = suffix
 
+    string_to_try = prefix + suffix
+
     # establish the baseline coverage for the prefix without any suffix
     _, base_instructions, _ = validate_prog(prefix)
-    expanded_rv, expanded_instructions, expanded_c = validate_prog(prefix + suffix)
+    expanded_rv, expanded_instructions, expanded_c = validate_prog(string_to_try)
 
     if log_level:
         log_program_result(
