@@ -14,7 +14,7 @@ BANK_PERCENTAGE = 0.5  # the percentage of suffixes that will be drawn from $suf
 IS_PARALLEL = True
 FITNESS_FUNCTION = "max_count"  # "max_count" | "max_length"
 
-my_program = os.environ.get("PROGRAM", "./program.out")
+MY_PROGRAM = os.environ.get("PROGRAM", "./program.out")
 tmp_JSON = os.environ.get("TMP_JSON", "/tmp/tmp.json")
 
 CHARSET = list(string.printable)
@@ -43,7 +43,8 @@ CHARSET_1_CATEGORIES = _CATEGORIES
 CHARSET_2_CATEGORIES = _CATEGORIES
 
 # suffixes is the bank of suffix strings found to cause large coverage differences
-suffixes = set([])
+SUFFIXES = set()
+FOUND = set()
 POPULATION = None  # SuffixPopulation, initialised in __main__
 
 
@@ -148,7 +149,7 @@ def get_instructions(input_string: str, log_level: int = 0) -> tuple[int | None,
     cmd = [
         "bash",
         "bin/handle_coverage.sh",
-        my_program,
+        MY_PROGRAM,
     ]
     try:
         result = subprocess.run(
@@ -191,25 +192,23 @@ def get_expanded_string(expand_length: int = LENGTH_INCREASE) -> str:
 
 # Prints a color-coded summary line for curr_str based on the program result rv
 # "complete" is green (newline), "incomplete" is yellow (newline), "wrong" is red (overwritten via \r)
-# space_len blanks are printed first to erase the previous \r line
 def log_program_result(curr_str, rv: str, n: int, c: int, suffix_count: str) -> None:
-    space_len = len(curr_str) * 2
     if rv == "complete":
-        print(" " * space_len, end="\r", flush=True)  # clear the \r line
+        print(" " * 80, end="\r", flush=True)  # clear the \r line
         print(
             "[%s]\t%s instr=%d, exit=%s. Input string is %s"
             % (suffix_count, rv, n, c, toc(repr(curr_str), "green"))
         )
     elif rv == "unexpected":
-        print(" " * space_len, end="\r", flush=True)  # clear the \r line
+        print(" " * 80, end="\r", flush=True)  # clear the \r line
         print(
             "[%s]\t%s instr=%d, exit=%s. Input string is %s"
             % (suffix_count, rv, n, c, toc(repr(curr_str), "yellow"))
         )
     elif rv == "wrong":
-        print(" " * space_len, end="\r", flush=True)  # clear the \r line
+        print(" " * 80, end="\r", flush=True)  # clear the \r line
         print(
-            "[%s]\t%s instr=%d, exit=%s. Input string is %s"  # % (rv, n, c, toc(repr(curr_str), "red"))
+            "[%s]\t%s instr=%d, exit=%s. Input string is %s"
             % (suffix_count, rv, n, c, toc(repr(curr_str), "red")),
             end="\r",
             flush=True,
@@ -303,7 +302,7 @@ def generate_suffixes() -> SuffixPopulation:
         curr = []
         for i in range(SAMPLE_COUNT):
             if i < SAMPLE_COUNT * BANK_PERCENTAGE:
-                remaining = [s for s in suffixes if s not in curr]
+                remaining = [s for s in SUFFIXES if s not in curr]
                 if remaining:
                     suffix = char + random.choice(remaining)
                 else:
@@ -368,14 +367,14 @@ def generate(
         for args in args_list:
             accepted, best_suffix, best_diff = _minimise_suffix_worker(args)
             results.append((accepted, best_suffix, best_diff))
-            if any(accepted):
-                break
 
     fitness_updates = []
     for orig_suffix, (accepted, best_suffix, best_diff) in zip(new_suffixes, results):
         for val in accepted:
             if val not in res:
                 res.append(val)
+            if val not in FOUND:
+                FOUND.add(val)
                 write("valid_inputs.txt", repr(val) + "\n")
         best_suffixes.append((best_suffix, best_diff))
         fitness_updates.append((orig_suffix, best_diff, best_suffix))
@@ -388,7 +387,7 @@ def generate(
     if max_best_diff > 0:
         for accepted, best_suffix, best_diff in results:
             if best_diff == max_best_diff:
-                suffixes.add(best_suffix)
+                SUFFIXES.add(best_suffix)
             if best_diff > 0:
                 curr_extension_length = 1
 

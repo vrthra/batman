@@ -17,20 +17,22 @@ gdbctl.out: src/gdbctl.c
 
 #DBG=-m pudb
 DBG=
+EXPLORER=bin/batman.py
+# EXPLORER=bin/robin.py
 
 pxctl: pxctl.out
 	cp $^ $@
 
 run.%: %.out
-	env PROGRAM=./$^ python3 $(DBG) bin/batman.py
+	env PROGRAM=./$^ python3 $(DBG) $(EXPLORER)
 
 
 
 run.cJSON: cJSON.out
-	env PROGRAM=./cJSON.out python3 $(DBG) bin/batman.py
+	env PROGRAM=./cJSON.out python3 $(DBG) $(EXPLORER)
 
 run.calc_parse: calc_parse.out
-	env PROGRAM=./calc_parse.out python3 $(DBG) bin/batman.py
+	env PROGRAM=./calc_parse.out python3 $(DBG) $(EXPLORER)
 
 get:
 	wget https://raw.githubusercontent.com/vrthra/mimid/refs/heads/master/Cmimid/examples/vector.h
@@ -42,7 +44,7 @@ push:
 	git push origin master
 
 v:
-	vim bin/batman.py
+	vim $(EXPLORER)
 
 reset:
 	rm -f priority_by_prefix.json priority_by_priority.json valid_inputs.txt selected_prefix.txt
