@@ -36,7 +36,7 @@ _CATEGORIES = [
     _BRACKETS_CLOSE,
     _QUOTES,
     list(string.whitespace),
-    *_OTHER_PUNCT,
+    _OTHER_PUNCT,
 ]
 
 CHARSET_1_CATEGORIES = _CATEGORIES
