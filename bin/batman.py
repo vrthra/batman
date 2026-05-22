@@ -440,8 +440,7 @@ def save_priority_queue(entries):
 
 def create_valid_strings(log_level):
     touch("valid_inputs.txt")
-    # entries = {c: PrefixEntry(c) for c in CHARSET}
-    entries = {'{"': PrefixEntry('{"')}
+    entries = {c: PrefixEntry(c) for c in CHARSET}
 
     while entries:
         min_p = min(e.priority for e in entries.values())
