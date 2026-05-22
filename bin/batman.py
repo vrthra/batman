@@ -184,7 +184,9 @@ def validate_prog(input_str, log_level: int = 0) -> tuple[str, int, int]:
 
 
 def get_expanded_string(expand_length: int = LENGTH_INCREASE) -> str:
-    return "".join(random.choice(CHARSET) for _ in range(expand_length))
+    return "".join(
+        random.choice(random.choice(_CATEGORIES)) for _ in range(expand_length)
+    )
 
 
 # Prints a color-coded summary line for curr_str based on the program result rv
