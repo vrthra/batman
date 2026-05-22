@@ -45,6 +45,6 @@ v:
 	vim bin/batman.py
 
 reset:
-	rm -f priority_by_prefix.json priority_by_priority.json valid_inputs.txt
+	rm -f priority_by_prefix.json priority_by_priority.json valid_inputs.txt selected_prefix.txt
 
 .PHONY: pull push v reset
