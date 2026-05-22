@@ -390,11 +390,17 @@ def generate(
             if best_diff == max_best_diff:
                 suffixes.add(best_suffix)
             if best_diff > 0:
-                extensions.append(seed_str + best_suffix)
+                curr_extension_length = 1
+
+                while curr_extension_length < len(best_suffix):
+                    extensions.append(seed_str + best_suffix[:curr_extension_length])
+                    curr_extension_length += 1
+                # extensions.append(seed_str + best_suffix)
             for acc in accepted:
                 if len(acc) > 1:
                     extensions.append(acc[:-1])
 
+    extensions = list(set(extensions))  # dedup
     return tried_chars, (max_best_diff == 0 and not res), extensions, len(best_suffixes)
 
 
@@ -436,11 +442,16 @@ def save_priority_queue(entries):
 
 def create_valid_strings(log_level):
     touch("valid_inputs.txt")
+    touch("selected_prefix.txt")
+
     entries = {c: PrefixEntry(c) for c in CHARSET}
 
     while entries:
         min_p = min(e.priority for e in entries.values())
         entry = random.choice([e for e in entries.values() if e.priority == min_p])
+
+        with open("selected_prefix.txt", "a") as f:
+            f.write(repr(entry.prefix) + "\n")
 
         tried_chars, is_dead_end, extensions, n_tried = generate(
             log_level, entry.prefix, entry.tried_count
