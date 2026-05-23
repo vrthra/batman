@@ -326,10 +326,12 @@ def _minimise_suffix_worker(args):
         prefix, suffix, log_level=log_level, suffix_count=suffix_count
     )
 
+
 def clearline():
     print(" " * 80, end="\r", flush=True)  # clear the \r line
 
-def overprint(s: str, end='\n', flush=False):
+
+def overprint(s: str, end="\n", flush=False):
     clearline()
     print(s, end=end, flush=flush)
 
@@ -359,7 +361,8 @@ def generate(
             seed_str,
             suffix,
             log_level,
-            "%d| %d/%d %d/%d" % (priority, i, SAMPLES_TO_TEST, tried_offset + i, len(POPULATION)),
+            "%d| %d/%d %d/%d"
+            % (priority, i, SAMPLES_TO_TEST, tried_offset + i, len(POPULATION)),
         )
         for i, suffix in enumerate(new_suffixes)
     ]
@@ -475,7 +478,7 @@ def create_valid_strings(log_level):
                 entries[ext] = PrefixEntry(ext)
             save_priority_queue(entries.values())
 
-        if not entry.remaining:
+        if not entry.remaining or is_dead_end:
             del entries[entry.prefix]
             save_priority_queue(entries.values())
 
