@@ -340,7 +340,7 @@ def overprint(s: str, end='\n', flush=False):
 # suffixes, whether no suffix produced any coverage change, and the list of
 # seed_str+suffix strings that achieved the maximum coverage diff (to enqueue as new prefixes).
 def generate(
-    log_level, seed_str: str = "", tried_offset: int = 0
+    log_level, seed_str: str = "", tried_offset: int = 0, priority: int = 0
 ) -> tuple[set[str], bool, list[str], int]:
     global suffixes
 
@@ -359,7 +359,7 @@ def generate(
             seed_str,
             suffix,
             log_level,
-            "%d/%d %d/%d" % (i, SAMPLES_TO_TEST, tried_offset + i, len(POPULATION)),
+            "%d| %d/%d %d/%d" % (priority, i, SAMPLES_TO_TEST, tried_offset + i, len(POPULATION)),
         )
         for i, suffix in enumerate(new_suffixes)
     ]
@@ -450,7 +450,7 @@ def create_valid_strings(log_level):
     touch("selected_prefix.txt")
 
     if PREFIX:
-        entries = {c: PrefixEntry(c) for c in PREFIX}
+        entries = {PREFIX: PrefixEntry(PREFIX)}
     else:
         entries = {c: PrefixEntry(c) for c in CHARSET}
 
@@ -461,7 +461,7 @@ def create_valid_strings(log_level):
         write("selected_prefix.txt", repr(entry.prefix) + "\n")
 
         tried_chars, is_dead_end, extensions, n_tried = generate(
-            log_level, entry.prefix, entry.tried_count
+            log_level, entry.prefix, entry.tried_count, entry.priority
         )
         entry.tried_count += n_tried
         entry.remaining -= tried_chars
