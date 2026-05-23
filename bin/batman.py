@@ -192,12 +192,12 @@ def extract_blocks_from_json(json_file: str | None = None) -> int | None:
 
 
 # Run perf and extract instruction count
-# Runs the target program under handle_coverage.sh with input_string fed via stdin,
-# then reads the coverage count from the JSON report written by that script
+# Runs the target program under count-blocks.sh with input_string fed via stdin,
+# then reads the blocks count from the JSON report written by that script
 def get_instructions(input_string: str, log_level: int = 0) -> tuple[int | None, int]:
     cmd = [
         "bash",
-        "bin/handle_coverage.sh",
+        "bin/count-blocks.sh",
         MY_PROGRAM,
     ]
     try:
@@ -222,7 +222,7 @@ def get_instructions(input_string: str, log_level: int = 0) -> tuple[int | None,
 
 # Runs the program on input_str and classifies the outcome as "complete" (exit 0), "wrong"
 # (positive exit code), or "unexpected" (negative exit code, timeout, or other error).
-# Returns a 3-tuple of (status, coverage_count, return_code).
+# Returns a 3-tuple of (status, block_count, return_code).
 def validate_prog(input_str, log_level: int = 0) -> tuple[str, int, int]:
     instructions, ret_code = get_instructions(input_str)
     if ret_code == 0:

@@ -1,16 +1,17 @@
 # Batman
 
-Batman is a coverage-guided input generator that discovers valid inputs for a target program
+Batman is a guided input generator that discovers valid inputs for a target program
 by combining a priority-queue-driven prefix search,
 a genetic algorithm over suffixes,
 and binary-search-based suffix minimisation.
 It requires no grammar or format specification;
-all guidance comes from LLVM source-based coverage instrumentation.
+all guidance comes from LLVM source-based coverage instrumentation which is
+used as a proxy for the number of blocks executed.
 
 ## Overview
 
 The core idea is to build valid inputs character by character,
-guided by how much each addition changes the program's coverage.
+guided by how much each addition changes the basic blocks (non-unique) executed by the program.
 A **prefix** is a string that has been partially explored.
 A **suffix** is a candidate continuation appended to a prefix for testing.
 When a prefix plus a suffix causes the program to execute more code than the prefix alone,
@@ -19,13 +20,13 @@ Batman exploits this signal to grow prefixes toward complete, accepted inputs.
 
 ## Components
 
-### 1. Coverage measurement (`handle_coverage.sh`, `get_instructions`)
+### 1. Execution measurement (`count-blocks.sh`, `get_instructions`)
 
-Every candidate string is run through `handle_coverage.sh`,
+Every candidate string is run through `count-blocks.sh`,
 which instruments the binary with `LLVM_PROFILE_FILE`, merges the raw profile data with
 `llvm-profdata`, and exports a JSON coverage report with `llvm-cov`.
-The coverage score is the sum of execution counts across all source regions in that report.
-A higher score means more code was exercised.
+The score is the sum of execution counts across all source regions in that report.
+A higher score means code was exercised more and/or more code was exercised.
 
 Each worker process uses a unique per-PID temp file path (`/tmp/batman_<pid>.json`)
 so that parallel runs do not collide on the coverage files.
@@ -75,23 +76,24 @@ After each round of suffix evaluation, the population evolves:
 
 The fitness function is selected by setting `FITNESS_FUNCTION`:
 
-- **`max_count`** (default): fitness = 1.0 if the suffix caused any coverage increase,
+- **`max_count`** (default): fitness = 1.0 if the suffix caused any increase in
+  executed block count,
   0.0 otherwise.
   Maximises the number of productive suffixes in the population.
-- **`max_length`**: fitness = length of the minimised best suffix if it caused a coverage
+- **`max_length`**: fitness = length of the minimised best suffix if it caused a block count
   increase, 0.0 otherwise.
   Pushes the population toward longer, structurally richer suffixes.
 
 ### 3. Suffix minimisation (`minimise_suffix`)
 
 For each `(prefix, suffix)` pair, `minimise_suffix` binary-searches for the shortest
-prefix of the suffix that still achieves the maximum observed coverage difference relative
+prefix of the suffix that still achieves the maximum observed block count difference relative
 to running the program on the prefix alone:
 
-1. Compute baseline coverage for `prefix`.
-2. Compute coverage for `prefix + full_suffix`; set `best_diff`.
+1. Compute baseline block count for `prefix`.
+2. Compute block count for `prefix + full_suffix`; set `best_diff`.
 3. Binary-search over suffix lengths from 0 to `len(suffix)`,
-   keeping the shortest length whose coverage diff is `>= best_diff`.
+   keeping the shortest length whose block count diff is `>= best_diff`.
 4. If a candidate achieves zero diff and is not a complete parse, stop early.
 5. Any candidate that causes the program to exit 0 is collected in `accepted`.
 
@@ -136,7 +138,7 @@ At each iteration the driver:
 
 The priority function is selected by setting `PRIORITY_FUNCTION`.
 All functions receive the current `PrefixEntry`, `n_tried` (suffix evaluations this round),
-and `max_instructions` (largest coverage delta seen this round), and return the new priority.
+and `max_instructions` (largest block count delta seen this round), and return the new priority.
 
 - **`by_extension_count`**: priority accumulates the total number of suffix
   minimisations run against this prefix (`priority += n_tried`).
@@ -161,9 +163,9 @@ and `max_instructions` (largest coverage delta seen this round), and return the 
 - **`by_length`**: priority = `len(prefix) + generate_count`.
   Replicates the original behaviour: shorter prefixes are preferred, and within the same
   length, prefixes tried fewer times are preferred.
-- **`by_instruction_count`**: priority accumulates the maximum coverage delta seen each
+- **`by_instruction_count`**: priority accumulates the maximum block count delta seen each
   round (`priority += max_instructions`).
-  Prefixes that repeatedly produce large coverage swings are deferred sooner.
+  Prefixes that repeatedly produce large block count swings are deferred sooner.
 
 The current state of the queue is written to disk after every change as two JSON files:
 
@@ -175,9 +177,10 @@ The current state of the queue is written to disk after every change as two JSON
 `generate(prefix)` samples `SAMPLES_TO_TEST` suffixes from the population,
 evaluates each with `minimise_suffix`, and builds extensions for the prefix queue:
 
-- **Bank update**: any suffix that achieved the maximum coverage diff in this batch is
+- **Bank update**: any suffix that achieved the maximum block count diff in this batch is
   added to the suffix bank for use in future population initialisation.
-- **Extensions from minimised suffixes**: any suffix with a positive coverage diff
+- **Extensions from minimised suffixes**: any suffix with a positive block
+  count diff
   (not just the maximum) contributes `prefix + best_suffix[:1]` — just the first
   character of the minimised suffix — as a new prefix to explore.
   Subsequent characters are discovered step by step through further `generate()` calls,
