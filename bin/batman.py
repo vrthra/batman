@@ -11,10 +11,12 @@ from concurrent.futures import ProcessPoolExecutor
 LENGTH_INCREASE = 64
 
 BANK_PERCENTAGE = 0.5  # fraction of each inner batch drawn from SUFFIXES (the suffix bank) instead of generated randomly
-IS_PARALLEL = False
+IS_PARALLEL = True
 FITNESS_FUNCTION = "max_count"  # "max_count" | "max_length"
 PRIORITY_FUNCTION = "by_boundary_count"  # "by_length" | "by_extension_count" | "by_most_explored" | "by_extensions_produced" | "by_depth" | "by_boundary_count" | "by_instruction_count"
-DISCARD_NON_BOUNDARY_EXTENSIONS = True  # if True, only enqueue extensions where binary search found a shorter suffix
+DISCARD_NON_BOUNDARY_EXTENSIONS = (
+    True  # if True, only enqueue extensions where binary search found a shorter suffix
+)
 ADD_PREFIXES_FROM_ACCEPTED = False  # if True, enqueue acc[:-1] for every accepted (exit-0) string found during minimisation
 
 MY_PROGRAM = os.environ.get("PROGRAM", "./program.out").strip()
@@ -51,8 +53,11 @@ SUFFIXES = set()
 FOUND = set()
 POPULATION = None  # SuffixPopulation, initialised in __main__
 
-def pause():...
+
+def pause():
+    ...
     # input()
+
 
 def _fitness_max_count(best_diff: int, best_suffix: str) -> float:
     return 1.0 if best_diff > 0 else 0.0
@@ -443,7 +448,9 @@ def generate(
     extensions = []
     boundary_extensions = set()
     if max_best_diff > 0:
-        for orig_suffix, (accepted, best_suffix, best_diff) in zip(new_suffixes, results):
+        for orig_suffix, (accepted, best_suffix, best_diff) in zip(
+            new_suffixes, results
+        ):
             is_boundary = best_diff > 0 and len(best_suffix) < len(orig_suffix)
             if best_diff == max_best_diff:
                 SUFFIXES.add(best_suffix)
@@ -460,17 +467,28 @@ def generate(
                         boundary_extensions.add(ext)
 
     extensions = list(set(extensions))  # dedup
-    return tried_chars, (max_best_diff == 0 and not res), extensions, boundary_extensions, len(best_suffixes), max_best_diff
+    return (
+        tried_chars,
+        (max_best_diff == 0 and not res),
+        extensions,
+        boundary_extensions,
+        len(best_suffixes),
+        max_best_diff,
+    )
 
 
 def write(w, s):
     with open(w, "a") as myfile:
         myfile.write(s)
-        myfile.close()
 
 
 def touch(w):
     write(w, "")
+
+
+def dump(jfile, jval):
+    with open(jfile, "w") as f:
+        json.dump(jval, f, indent=2)
 
 
 class PrefixEntry:
@@ -491,10 +509,10 @@ def save_priority_queue(entries):
     for e in entries:
         by_priority.setdefault(e.priority, []).append(e.prefix)
         by_prefix[e.prefix] = e.priority
-    with open("priority_by_priority.json", "w") as f:
-        json.dump({str(k): v for k, v in sorted(by_priority.items())}, f, indent=2)
-    with open("priority_by_prefix.json", "w") as f:
-        json.dump(by_prefix, f, indent=2)
+    dump(
+        "priority_by_priority.json", {str(k): v for k, v in sorted(by_priority.items())}
+    )
+    dump("priority_by_prefix.json", by_prefix)
 
 
 # Main driver: maintains a dict of PrefixEntry objects seeded with single chars (or PREFIX).
@@ -516,24 +534,39 @@ def create_valid_strings(log_level):
 
         write("selected_prefix.txt", repr(entry.prefix) + "\n")
 
-        tried_chars, is_dead_end, extensions, boundary_extensions, n_tried, max_instructions = generate(
-            log_level, entry.prefix, entry.tried_count, entry.priority
-        )
+        (
+            tried_chars,
+            is_dead_end,
+            extensions,
+            boundary_extensions,
+            n_tried,
+            max_instructions,
+        ) = generate(log_level, entry.prefix, entry.tried_count, entry.priority)
         entry.tried_count += n_tried
         entry.generate_count += 1
         entry.remaining -= tried_chars
 
-        candidates = [ext for ext in extensions if not DISCARD_NON_BOUNDARY_EXTENSIONS or ext in boundary_extensions]
+        candidates = [
+            ext
+            for ext in extensions
+            if not DISCARD_NON_BOUNDARY_EXTENSIONS or ext in boundary_extensions
+        ]
         new_extensions = [ext for ext in candidates if ext not in entries]
         entry.extension_count += len(new_extensions)
 
-        entry.priority = _PRIORITY_FNS[PRIORITY_FUNCTION](entry, n_tried, max_instructions)
+        entry.priority = _PRIORITY_FNS[PRIORITY_FUNCTION](
+            entry, n_tried, max_instructions
+        )
         save_priority_queue(entries.values())
 
         if new_extensions:
             for ext in new_extensions:
-                child_bc = entry.boundary_count + (1 if ext in boundary_extensions else 0)
-                entries[ext] = PrefixEntry(ext, depth=entry.depth + 1, boundary_count=child_bc)
+                child_bc = entry.boundary_count + (
+                    1 if ext in boundary_extensions else 0
+                )
+                entries[ext] = PrefixEntry(
+                    ext, depth=entry.depth + 1, boundary_count=child_bc
+                )
             save_priority_queue(entries.values())
 
         if not entry.remaining or is_dead_end:
