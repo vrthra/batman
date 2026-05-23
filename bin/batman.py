@@ -10,9 +10,12 @@ from concurrent.futures import ProcessPoolExecutor
 
 LENGTH_INCREASE = 64
 
-BANK_PERCENTAGE = 0.5  # the percentage of suffixes that will be drawn from $suffixes instead of being generated randomly
-IS_PARALLEL = True
+BANK_PERCENTAGE = 0.5  # fraction of each inner batch drawn from SUFFIXES (the suffix bank) instead of generated randomly
+IS_PARALLEL = False
 FITNESS_FUNCTION = "max_count"  # "max_count" | "max_length"
+PRIORITY_FUNCTION = "by_boundary_count"  # "by_length" | "by_extension_count" | "by_most_explored" | "by_extensions_produced" | "by_depth" | "by_boundary_count" | "by_instruction_count"
+DISCARD_NON_BOUNDARY_EXTENSIONS = True  # if True, only enqueue extensions where binary search found a shorter suffix
+ADD_PREFIXES_FROM_ACCEPTED = False  # if True, enqueue acc[:-1] for every accepted (exit-0) string found during minimisation
 
 MY_PROGRAM = os.environ.get("PROGRAM", "./program.out").strip()
 tmp_JSON = os.environ.get("TMP_JSON", "/tmp/tmp.json").strip()
@@ -48,6 +51,8 @@ SUFFIXES = set()
 FOUND = set()
 POPULATION = None  # SuffixPopulation, initialised in __main__
 
+def pause():...
+    # input()
 
 def _fitness_max_count(best_diff: int, best_suffix: str) -> float:
     return 1.0 if best_diff > 0 else 0.0
@@ -60,6 +65,45 @@ def _fitness_max_length(best_diff: int, best_suffix: str) -> float:
 _FITNESS_FNS = {
     "max_count": _fitness_max_count,
     "max_length": _fitness_max_length,
+}
+
+
+def _priority_by_length(entry, n_tried: int, max_instructions: int) -> int:
+    return len(entry.prefix) + entry.generate_count
+
+
+def _priority_by_extension_count(entry, n_tried: int, max_instructions: int) -> int:
+    return entry.priority + n_tried
+
+
+def _priority_by_most_explored(entry, n_tried: int, max_instructions: int) -> int:
+    return entry.priority - n_tried
+
+
+def _priority_by_extensions_produced(entry, n_tried: int, max_instructions: int) -> int:
+    return -entry.extension_count
+
+
+def _priority_by_depth(entry, n_tried: int, max_instructions: int) -> int:
+    return -entry.depth
+
+
+def _priority_by_boundary_count(entry, n_tried: int, max_instructions: int) -> int:
+    return entry.generate_count - entry.boundary_count
+
+
+def _priority_by_instruction_count(entry, n_tried: int, max_instructions: int) -> int:
+    return entry.priority + max_instructions
+
+
+_PRIORITY_FNS = {
+    "by_length": _priority_by_length,
+    "by_extension_count": _priority_by_extension_count,
+    "by_most_explored": _priority_by_most_explored,
+    "by_extensions_produced": _priority_by_extensions_produced,
+    "by_depth": _priority_by_depth,
+    "by_boundary_count": _priority_by_boundary_count,
+    "by_instruction_count": _priority_by_instruction_count,
 }
 
 
@@ -172,9 +216,9 @@ def get_instructions(input_string: str, log_level: int = 0) -> tuple[int | None,
     return instructions, result.returncode
 
 
-# Runs the program on input_str and classifies the outcome as "complete" (exit 0) or "wrong"
-# (non-zero exit or timeout); returns a 3-tuple of (status, coverage_count, return_code)
-# Returns ("wrong", -1, -1) on timeout or any other exception
+# Runs the program on input_str and classifies the outcome as "complete" (exit 0), "wrong"
+# (positive exit code), or "unexpected" (negative exit code, timeout, or other error).
+# Returns a 3-tuple of (status, coverage_count, return_code).
 def validate_prog(input_str, log_level: int = 0) -> tuple[str, int, int]:
     instructions, ret_code = get_instructions(input_str)
     if ret_code == 0:
@@ -211,6 +255,7 @@ def log_program_result(curr_str, rv: str, n: int, c: int, suffix_count: str) -> 
             end="\r",
             flush=True,
         )
+    pause()
 
 
 # Binary-searches for the shortest prefix of suffix that still maximises the coverage
@@ -277,7 +322,7 @@ def minimise_suffix(
     return accepted, best_suffix, best_diff
 
 
-# Picks a character for the second level of suffix generation: first selects one of the five
+# Picks a character for the first level of suffix generation: first selects one of the seven
 # categories uniformly at random, then picks uniformly within that category; this gives equal
 # weight to each category regardless of how many characters it contains
 def charset_1() -> str:
@@ -288,13 +333,14 @@ def charset_2() -> str:
     return random.choice(random.choice(CHARSET_2_CATEGORIES))
 
 
-# Yields c² suffix candidates: outer loop over each char in CHARSET (c iterations), inner loop
-# of SAMPLE_COUNT (c) iterations per char; for the first BANK_PERCENTAGE of each inner loop,
-# draws from the suffixes bank (prepended with char), falling back to the three-level structure
-# when the bank is empty; the remainder of each inner loop always uses the three-level structure:
+# Returns a SuffixPopulation of c² individuals: outer loop runs c times (c = SAMPLE_COUNT),
+# each iteration drawing a fresh charset_1() character; inner loop of SAMPLE_COUNT iterations
+# per outer step; for the first BANK_PERCENTAGE of each inner loop, draws from the suffix bank
+# (prepended with that character), falling back to the three-level structure when the bank is
+# empty; the remainder of each inner loop always uses the three-level structure:
 #   level 1 — charset_1() (category-weighted first character)
 #   level 2 — charset_2() (category-weighted second character)
-#   level 3 — get_expanded_string (random extension from the two-char prefix)
+#   level 3 — get_expanded_string (random extension tail)
 def generate_suffixes() -> SuffixPopulation:
     individuals = []
     for _ in range(SAMPLE_COUNT):
@@ -327,25 +373,27 @@ def _minimise_suffix_worker(args):
     )
 
 def clearline():
-    print(" " * 80, end="\r", flush=True)  # clear the \r line
+    print()
+    # print(" " * 80, end="\r", flush=True)  # clear the \r line
 
 def overprint(s: str, end='\n', flush=False):
     clearline()
     print(s, end=end, flush=flush)
 
 
-# Expands seed_str by trying sampled suffixes from MY_SUFFIXES, minimising each, and
-# collecting complete strings; banks suffixes that achieved the best coverage difference.
-# Returns (tried_chars, is_dead_end, extensions): the set of first-chars of sampled
-# suffixes, whether no suffix produced any coverage change, and the list of
-# seed_str+suffix strings that achieved the maximum coverage diff (to enqueue as new prefixes).
+# Expands seed_str by sampling SAMPLES_TO_TEST suffixes from POPULATION, minimising each,
+# and collecting complete strings; banks suffixes that achieved the best coverage difference.
+# Returns (tried_chars, is_dead_end, extensions, boundary_extensions, n_tried, max_diff):
+# the set of first chars sampled, whether no suffix changed coverage and no complete strings
+# were found, the list of seed_str+best_suffix[:1] candidates to enqueue, the subset that
+# crossed a token boundary, the number of suffix evaluations, and the largest coverage delta.
 def generate(
     log_level, seed_str: str = "", tried_offset: int = 0, priority: int = 0
-) -> tuple[set[str], bool, list[str], int]:
+) -> tuple[set[str], bool, list[str], set[str], int, int]:
     global suffixes
 
     if POPULATION is None:
-        return set(), False, [], 0
+        return set(), False, [], set(), 0, 0
 
     overprint(f"seed prefix {repr(seed_str)}")
 
@@ -390,23 +438,26 @@ def generate(
 
     max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
     extensions = []
+    boundary_extensions = set()
     if max_best_diff > 0:
-        for accepted, best_suffix, best_diff in results:
+        for orig_suffix, (accepted, best_suffix, best_diff) in zip(new_suffixes, results):
+            is_boundary = best_diff > 0 and len(best_suffix) < len(orig_suffix)
             if best_diff == max_best_diff:
                 SUFFIXES.add(best_suffix)
             if best_diff > 0:
-                curr_extension_length = 1
-
-                while curr_extension_length < len(best_suffix):
-                    extensions.append(seed_str + best_suffix[:curr_extension_length])
-                    curr_extension_length += 1
-                # extensions.append(seed_str + best_suffix)
-            for acc in accepted:
-                if len(acc) > 1:
-                    extensions.append(acc[:-1])
+                ext = seed_str + best_suffix[:1]
+                extensions.append(ext)
+                if is_boundary:
+                    boundary_extensions.add(ext)
+            if ADD_PREFIXES_FROM_ACCEPTED:
+                for acc in accepted:
+                    if len(acc) > 1:
+                        ext = acc[:-1]
+                        extensions.append(ext)
+                        boundary_extensions.add(ext)
 
     extensions = list(set(extensions))  # dedup
-    return tried_chars, (max_best_diff == 0 and not res), extensions, len(best_suffixes)
+    return tried_chars, (max_best_diff == 0 and not res), extensions, boundary_extensions, len(best_suffixes), max_best_diff
 
 
 def write(w, s):
@@ -420,19 +471,17 @@ def touch(w):
 
 
 class PrefixEntry:
-    def __init__(self, prefix):
+    def __init__(self, prefix, depth=0, boundary_count=0):
         self.prefix = prefix
-        self.priority = len(prefix)  # shorter prefixes have higher priority
+        self.priority = 0
         self.remaining = set(CHARSET)
         self.tried_count = 0
+        self.generate_count = 0
+        self.extension_count = 0
+        self.depth = depth
+        self.boundary_count = boundary_count
 
 
-# Main driver: maintains a priority queue of prefixes seeded with single chars.
-# Always picks from the lowest-priority group at random. Priority = len(prefix),
-# so shorter prefixes are always preferred over longer ones. Dead ends increment
-# priority by 1 to defer the entry behind peers of the same length. Productive
-# continuations are enqueued as new, longer entries. An entry is discarded once
-# all possible first-char extensions have been tried.
 def save_priority_queue(entries):
     by_priority = {}
     by_prefix = {}
@@ -445,6 +494,10 @@ def save_priority_queue(entries):
         json.dump(by_prefix, f, indent=2)
 
 
+# Main driver: maintains a dict of PrefixEntry objects seeded with single chars (or PREFIX).
+# At each iteration picks a random entry from the lowest-priority group, calls generate(),
+# updates the entry's priority via the active priority function, enqueues any new extensions,
+# and removes entries whose remaining first-char set is exhausted.
 def create_valid_strings(log_level):
     touch("valid_inputs.txt")
     touch("selected_prefix.txt")
@@ -460,19 +513,24 @@ def create_valid_strings(log_level):
 
         write("selected_prefix.txt", repr(entry.prefix) + "\n")
 
-        tried_chars, is_dead_end, extensions, n_tried = generate(
+        tried_chars, is_dead_end, extensions, boundary_extensions, n_tried, max_instructions = generate(
             log_level, entry.prefix, entry.tried_count, entry.priority
         )
         entry.tried_count += n_tried
+        entry.generate_count += 1
         entry.remaining -= tried_chars
 
-        entry.priority += 1
+        candidates = [ext for ext in extensions if not DISCARD_NON_BOUNDARY_EXTENSIONS or ext in boundary_extensions]
+        new_extensions = [ext for ext in candidates if ext not in entries]
+        entry.extension_count += len(new_extensions)
+
+        entry.priority = _PRIORITY_FNS[PRIORITY_FUNCTION](entry, n_tried, max_instructions)
         save_priority_queue(entries.values())
 
-        new_extensions = [ext for ext in extensions if ext not in entries]
         if new_extensions:
             for ext in new_extensions:
-                entries[ext] = PrefixEntry(ext)
+                child_bc = entry.boundary_count + (1 if ext in boundary_extensions else 0)
+                entries[ext] = PrefixEntry(ext, depth=entry.depth + 1, boundary_count=child_bc)
             save_priority_queue(entries.values())
 
         if not entry.remaining:

@@ -102,23 +102,68 @@ The return value is `(accepted, best_suffix, best_diff)`.
 Batman maintains a dict of unique `PrefixEntry` objects keyed by prefix string.
 Each entry tracks:
 
-- **`priority`**: starts at `len(prefix)`; incremented by 1 after every attempt.
-  Shorter prefixes are always explored before longer ones.
-  Within the same length, prefixes that have been tried fewer times are preferred.
+- **`priority`**: an integer (may be negative); lower values are explored first.
+  Computed after every `generate()` call by the active priority function (see below).
 - **`remaining`**: the set of first characters not yet seen among the sampled suffixes for
   this prefix.
   When `remaining` is empty the prefix is discarded — all reachable first-character
   continuations have been sampled at least once.
 - **`tried_count`**: total number of suffix evaluations across all attempts,
   used to display a cumulative progress counter in the log.
+- **`generate_count`**: number of times `generate()` has been called for this prefix,
+  used by the `by_length` priority function.
+- **`extension_count`**: cumulative number of new child prefixes produced by this prefix,
+  used by the `by_extensions_produced` priority function.
+- **`depth`**: number of extension steps from the initial seed to this prefix
+  (seed = 0, first child = 1, grandchild = 2, …),
+  used by the `by_depth` priority function.
+- **`boundary_count`**: number of token boundaries crossed in the extension chain from
+  the initial seed to this prefix, inherited from the parent at creation time.
+  A boundary is counted when the extension that produced this prefix came from a suffix
+  trial where binary search successfully shortened the suffix (indicating a token boundary
+  was found), or from a complete accepted parse.
+  Used by the `by_boundary_count` priority function.
 
 At each iteration the driver:
 
 1. Picks a random entry from the lowest-priority group.
 2. Calls `generate()` with that prefix.
-3. Increments the entry's priority by 1.
+3. Updates the entry's priority via the active priority function.
 4. Adds any new extensions to the queue (deduplication is free because the queue is a dict).
 5. Removes the entry if its `remaining` set is exhausted.
+
+#### Priority functions
+
+The priority function is selected by setting `PRIORITY_FUNCTION`.
+All functions receive the current `PrefixEntry`, `n_tried` (suffix evaluations this round),
+and `max_instructions` (largest coverage delta seen this round), and return the new priority.
+
+- **`by_extension_count`** (default): priority accumulates the total number of suffix
+  minimisations run against this prefix (`priority += n_tried`).
+  Entries that have been explored less are always preferred, regardless of prefix length.
+- **`by_most_explored`**: the inverse — priority decreases by `n_tried` each round
+  (going negative), so the most-explored entries are always preferred.
+- **`by_extensions_produced`**: priority = `−extension_count`, where `extension_count`
+  is the cumulative number of new child prefixes this prefix has produced.
+  Prefers the most productive prefixes — those that have spawned the longest chains of
+  extensions — rather than those merely tried most often.
+- **`by_depth`**: priority = `−depth`, where `depth` is the number of extension steps
+  from the initial seed (fixed at creation time).
+  Always prefers the deepest prefix in the extension chain: if `aaaa` → `aaaa1234` →
+  `aaaa1234bbbb`, the last entry (depth 2) is always explored before shallower ones.
+- **`by_boundary_count`**: priority = `generate_count − boundary_count`, where
+  `boundary_count` is inherited from the parent at creation time (each extension step
+  that crossed a token boundary adds 1), and `generate_count` increments each time the
+  entry is explored.
+  An entry with `boundary_count = k` can be explored `k` extra times before tying with a
+  fresh entry that has no boundaries, preventing any single prefix from being picked
+  indefinitely while still favouring structurally richer prefixes.
+- **`by_length`**: priority = `len(prefix) + generate_count`.
+  Replicates the original behaviour: shorter prefixes are preferred, and within the same
+  length, prefixes tried fewer times are preferred.
+- **`by_instruction_count`**: priority accumulates the maximum coverage delta seen each
+  round (`priority += max_instructions`).
+  Prefixes that repeatedly produce large coverage swings are deferred sooner.
 
 The current state of the queue is written to disk after every change as two JSON files:
 
@@ -133,10 +178,11 @@ evaluates each with `minimise_suffix`, and builds extensions for the prefix queu
 - **Bank update**: any suffix that achieved the maximum coverage diff in this batch is
   added to the suffix bank for use in future population initialisation.
 - **Extensions from minimised suffixes**: any suffix with a positive coverage diff
-  (not just the maximum) contributes `prefix + best_suffix` as a new prefix to explore.
-  This ensures that partial parses — such as `{"` after seed `{` — are enqueued alongside
-  the dominant completion (`{}`), so structurally richer paths are not permanently blocked
-  by a simpler one.
+  (not just the maximum) contributes `prefix + best_suffix[:1]` — just the first
+  character of the minimised suffix — as a new prefix to explore.
+  Subsequent characters are discovered step by step through further `generate()` calls,
+  so each character that crosses a token boundary earns its own `boundary_count`
+  increment rather than the whole suffix arriving in one leap.
 - **Extensions from complete strings**: any complete string found during binary search has
   its last character stripped and is added as a prefix.
   For example, if `{"key":42}` is accepted, `{"key":42` is enqueued,
@@ -156,7 +202,10 @@ one `repr()`-quoted string per line.
 | `PROGRAM` (env) | `./program.out` | Path to the target binary |
 | `TMP_JSON` (env) | `/tmp/tmp.json` | Base path for coverage JSON output |
 | `IS_PARALLEL` | `True` | Run suffix evaluations in parallel |
+| `DISCARD_NON_BOUNDARY_EXTENSIONS` | `True` | If `True`, discard extensions where binary search could not shorten the suffix (no token boundary found), avoiding needless exploration of long single-token strings |
+| `ADD_PREFIXES_FROM_ACCEPTED` | `False` | If `True`, enqueue `acc[:-1]` for every accepted (exit-0) string found during minimisation, allowing the search to grow from known-complete inputs |
 | `FITNESS_FUNCTION` | `"max_count"` | GA fitness function (`"max_count"` or `"max_length"`) |
+| `PRIORITY_FUNCTION` | `"by_extension_count"` | Priority function (`"by_extension_count"`, `"by_most_explored"`, `"by_extensions_produced"`, `"by_depth"`, `"by_boundary_count"`, `"by_length"`, or `"by_instruction_count"`) |
 | `SAMPLES_TO_TEST` | `100` | Suffixes sampled per `generate()` call |
 | `BANK_PERCENTAGE` | `0.5` | Fraction of initial population seeded from the bank |
 | `LENGTH_INCREASE` | `64` | Length of the random tail in each generated suffix |
