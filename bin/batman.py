@@ -14,9 +14,7 @@ BANK_PERCENTAGE = 0.5  # fraction of each inner batch drawn from SUFFIXES (the s
 IS_PARALLEL = True
 FITNESS_FUNCTION = "max_count"  # "max_count" | "max_length"
 PRIORITY_FUNCTION = "by_boundary_count"  # "by_length" | "by_extension_count" | "by_most_explored" | "by_extensions_produced" | "by_depth" | "by_boundary_count" | "by_instruction_count"
-DISCARD_NON_BOUNDARY_EXTENSIONS = (
-    True  # if True, only enqueue extensions where binary search found a shorter suffix
-)
+DISCARD_NON_BOUNDARY_EXTENSIONS = True  # if True, only enqueue extensions where binary search found a shorter suffix
 ADD_PREFIXES_FROM_ACCEPTED = False  # if True, enqueue acc[:-1] for every accepted (exit-0) string found during minimisation
 
 MY_PROGRAM = os.environ.get("PROGRAM", "./program.out").strip()
