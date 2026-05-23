@@ -27,7 +27,7 @@ run.%: %.out
 	env PROGRAM=./$^ python3 $(DBG) $(EXPLORER)
 
 run.cJSON: export PROGRAM=cJSON.out 
-run.cJSON: export PREFIX={
+# run.cJSON: export PREFIX={
 run.cJSON: cJSON.out
 	python3 $(DBG) $(EXPLORER)
 
