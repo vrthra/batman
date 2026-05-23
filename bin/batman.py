@@ -324,7 +324,7 @@ def minimise_suffix(
         if diff == 0 and rv != "complete":
             break
 
-    return accepted, best_suffix, best_diff
+    return suffix, accepted, best_suffix, best_diff
 
 
 # Picks a character for the first level of suffix generation: first selects one of the seven
@@ -379,8 +379,8 @@ def _minimise_suffix_worker(args):
 
 
 def clearline():
-    print()
-    # print(" " * 80, end="\r", flush=True)  # clear the \r line
+    # print()
+    print(" " * 80, end="\r", flush=True)  # clear the \r line
 
 
 def overprint(s: str, end="\n", flush=False):
@@ -388,27 +388,7 @@ def overprint(s: str, end="\n", flush=False):
     print(s, end=end, flush=flush)
 
 
-# Expands seed_str by sampling SAMPLES_TO_TEST suffixes from POPULATION, minimising each,
-# and collecting complete strings; banks suffixes that achieved the best coverage difference.
-# Returns (tried_chars, is_dead_end, extensions, boundary_extensions, n_tried, max_diff):
-# the set of first chars sampled, whether no suffix changed coverage and no complete strings
-# were found, the list of seed_str+best_suffix[:1] candidates to enqueue, the subset that
-# crossed a token boundary, the number of suffix evaluations, and the largest coverage delta.
-def generate(
-    log_level, seed_str: str = "", tried_offset: int = 0, priority: int = 0
-) -> tuple[set[str], bool, list[str], set[str], int, int]:
-    global suffixes
-
-    if POPULATION is None:
-        return set(), False, [], set(), 0, 0
-
-    overprint(f"seed prefix {repr(seed_str)}")
-
-    best_suffixes = []
-    res = []
-    tried_chars = set()
-
-    new_suffixes = POPULATION.sample(SAMPLES_TO_TEST)
+def exec_args(seed_str, new_suffixes, tried_offset, priority, log_level):
     args_list = [
         (
             seed_str,
@@ -419,7 +399,6 @@ def generate(
         )
         for i, suffix in enumerate(new_suffixes)
     ]
-    tried_chars = {s[0] for s in new_suffixes}
 
     if IS_PARALLEL:
         with ProcessPoolExecutor(initializer=_init_worker) as executor:
@@ -427,11 +406,17 @@ def generate(
     else:
         results = []
         for args in args_list:
-            accepted, best_suffix, best_diff = _minimise_suffix_worker(args)
-            results.append((accepted, best_suffix, best_diff))
+            # (suffix, accepted, best_suffix, best_diff)
+            result = _minimise_suffix_worker(args)
+            results.append(result)
+    return results
 
+
+def evolve_population(results):
+    res = []
     fitness_updates = []
-    for orig_suffix, (accepted, best_suffix, best_diff) in zip(new_suffixes, results):
+    best_suffixes = []
+    for orig_suffix, accepted, best_suffix, best_diff in results:
         for val in accepted:
             if val not in res:
                 res.append(val)
@@ -443,14 +428,34 @@ def generate(
 
     POPULATION.update_fitness(fitness_updates)
     POPULATION.evolve()
+    return best_suffixes, res
+
+
+# Expands seed_str by sampling SAMPLES_TO_TEST suffixes from POPULATION, minimising each,
+# and collecting complete strings; banks suffixes that achieved the best coverage difference.
+# Returns (tried_chars, is_dead_end, extensions, boundary_extensions, n_tried, max_diff):
+# the set of first chars sampled, whether no suffix changed coverage and no complete strings
+# were found, the list of seed_str+best_suffix[:1] candidates to enqueue, the subset that
+# crossed a token boundary, the number of suffix evaluations, and the largest coverage delta.
+def generate(
+    seed_str: str = "", tried_offset: int = 0, priority: int = 0, log_level=0
+) -> tuple[set[str], bool, list[str], set[str], int, int]:
+    print()
+    print(f"generate: seed prefix {repr(seed_str)}")
+
+    new_suffixes = POPULATION.sample(SAMPLES_TO_TEST)
+    tried_chars = {s[0] for s in new_suffixes}
+
+    # Execute our program, and get the results.
+    results = exec_args(seed_str, new_suffixes, tried_offset, priority, log_level)
+
+    best_suffixes, res = evolve_population(results)
 
     max_best_diff = max(best_suffixes, key=lambda x: x[1])[1]
     extensions = []
     boundary_extensions = set()
     if max_best_diff > 0:
-        for orig_suffix, (accepted, best_suffix, best_diff) in zip(
-            new_suffixes, results
-        ):
+        for orig_suffix, accepted, best_suffix, best_diff in results:
             is_boundary = best_diff > 0 and len(best_suffix) < len(orig_suffix)
             if best_diff == max_best_diff:
                 SUFFIXES.add(best_suffix)
@@ -459,18 +464,18 @@ def generate(
                 extensions.append(ext)
                 if is_boundary:
                     boundary_extensions.add(ext)
-            if ADD_PREFIXES_FROM_ACCEPTED:
-                for acc in accepted:
-                    if len(acc) > 1:
-                        ext = acc[:-1]
-                        extensions.append(ext)
-                        boundary_extensions.add(ext)
-
-    extensions = list(set(extensions))  # dedup
+            if not ADD_PREFIXES_FROM_ACCEPTED:
+                continue
+            for acc in accepted:
+                if not acc:
+                    continue
+                ext = acc[:-1]
+                extensions.append(ext)
+                boundary_extensions.add(ext)
     return (
         tried_chars,
         (max_best_diff == 0 and not res),
-        extensions,
+        list(set(extensions)),  # dedup
         boundary_extensions,
         len(best_suffixes),
         max_best_diff,
@@ -529,6 +534,8 @@ def create_valid_strings(log_level):
         entries = {c: PrefixEntry(c) for c in CHARSET}
 
     while entries:
+        # Pick the entry with the minimum priority to explore. Random choice
+        # is the tie breaker.
         min_p = min(e.priority for e in entries.values())
         entry = random.choice([e for e in entries.values() if e.priority == min_p])
 
@@ -541,7 +548,7 @@ def create_valid_strings(log_level):
             boundary_extensions,
             n_tried,
             max_instructions,
-        ) = generate(log_level, entry.prefix, entry.tried_count, entry.priority)
+        ) = generate(entry.prefix, entry.tried_count, entry.priority, log_level)
         entry.tried_count += n_tried
         entry.generate_count += 1
         entry.remaining -= tried_chars
@@ -557,21 +564,19 @@ def create_valid_strings(log_level):
         entry.priority = _PRIORITY_FNS[PRIORITY_FUNCTION](
             entry, n_tried, max_instructions
         )
-        save_priority_queue(entries.values())
 
-        if new_extensions:
-            for ext in new_extensions:
-                child_bc = entry.boundary_count + (
-                    1 if ext in boundary_extensions else 0
-                )
-                entries[ext] = PrefixEntry(
-                    ext, depth=entry.depth + 1, boundary_count=child_bc
-                )
-            save_priority_queue(entries.values())
+        for ext in new_extensions:
+            if ext in boundary_extensions:
+                child_bc = entry.boundary_count + 1
+            entries[ext] = PrefixEntry(
+                ext, depth=entry.depth + 1, boundary_count=child_bc
+            )
 
         if not entry.remaining or is_dead_end:
             del entries[entry.prefix]
-            save_priority_queue(entries.values())
+
+        # Priority queue is saved after each entry is explored.
+        save_priority_queue(entries.values())
 
     print("All prefixes exhausted")
 

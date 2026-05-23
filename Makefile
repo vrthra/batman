@@ -50,4 +50,7 @@ v:
 reset:
 	rm -f priority_by_prefix.json priority_by_priority.json valid_inputs.txt selected_prefix.txt
 
+format:
+	ruff format $(EXPLORER)
+
 .PHONY: pull push v reset
